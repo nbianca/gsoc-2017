@@ -1,0 +1,306 @@
+From ac8bc04ad788770f19b08ae990008343151ce5c5 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nbianca@users.noreply.github.com>
+Date: Thu, 17 Aug 2017 21:32:37 +0100
+Subject: [PATCH] Set user title from the badge view (#5049)
+
+* title info under notification
+
+* create badge-title as component
+
+* display available titles, close button
+
+* remove visual feedback when grant new badge
+
+* Made changes after review.
+
+* Some minor fixes.
+---
+ .../discourse/components/badge-title.js.es6        | 28 ++++++++++++++++++++++
+ .../discourse/controllers/badges/show.js.es6       | 17 ++++++++++++-
+ .../discourse/routes/badges-show.js.es6            | 19 ++++++++++++---
+ .../discourse/templates/badges/show.hbs            | 16 ++++++++++++-
+ .../discourse/templates/components/badge-title.hbs | 25 +++++++++++++++++++
+ .../discourse/templates/user/badge-title.hbs       | 26 +-------------------
+ .../stylesheets/common/base/user-badges.scss       | 12 ++++++++++
+ app/services/badge_granter.rb                      |  2 ++
+ 8 files changed, 115 insertions(+), 30 deletions(-)
+ create mode 100644 app/assets/javascripts/discourse/components/badge-title.js.es6
+ create mode 100644 app/assets/javascripts/discourse/templates/components/badge-title.hbs
+
+diff --git a/app/assets/javascripts/discourse/components/badge-title.js.es6 b/app/assets/javascripts/discourse/components/badge-title.js.es6
+new file mode 100644
+index 0000000000..95da5718bb
+--- /dev/null
++++ b/app/assets/javascripts/discourse/components/badge-title.js.es6
+@@ -0,0 +1,28 @@
++import { ajax } from 'discourse/lib/ajax';
++import BadgeSelectController from 'discourse/mixins/badge-select-controller';
++
++export default Ember.Component.extend(BadgeSelectController, {
++  classNames: ["badge-title"],
++
++  saved: false,
++  saving: false,
++
++  actions: {
++    save() {
++      this.setProperties({ saved: false, saving: true });
++
++      ajax(this.get('user.path') + "/preferences/badge_title", {
++        type: "PUT",
++        data: { user_badge_id: this.get('selectedUserBadgeId') }
++      }).then(() => {
++        this.setProperties({
++          saved: true,
++          saving: false,
++          "user.title": this.get('selectedUserBadge.badge.name')
++        });
++      }, () => {
++        bootbox.alert(I18n.t('generic_error'));
++      });
++    }
++  }
++});
+diff --git a/app/assets/javascripts/discourse/controllers/badges/show.js.es6 b/app/assets/javascripts/discourse/controllers/badges/show.js.es6
+index f7f79f14c4..5904def6c9 100644
+--- a/app/assets/javascripts/discourse/controllers/badges/show.js.es6
++++ b/app/assets/javascripts/discourse/controllers/badges/show.js.es6
+@@ -1,11 +1,17 @@
+ import UserBadge from 'discourse/models/user-badge';
+ import { default as computed, observes } from 'ember-addons/ember-computed-decorators';
++import BadgeSelectController from "discourse/mixins/badge-select-controller";
+ 
+-export default Ember.Controller.extend({
++export default Ember.Controller.extend(BadgeSelectController, {
+   queryParams: ['username'],
+   noMoreBadges: false,
+   userBadges: null,
+   application: Ember.inject.controller(),
++  hiddenSetTitle: true,
++
++  filteredList: function() {
++    return this.get('userBadgesAll').filterBy('badge.allow_title', true);
++  }.property('userBadgesAll'),
+ 
+   @computed('username')
+   user(username) {
+@@ -19,6 +25,11 @@ export default Ember.Controller.extend({
+     return username ? userCount : modelCount;
+   },
+ 
++  @computed("model.has_title_badges")
++  canSelectTitle(hasTitleBadges) {
++    return this.siteSettings.enable_badges && hasTitleBadges;
++  },
++
+   actions: {
+     loadMore() {
+       if (this.get('loadingMore')) {
+@@ -39,6 +50,10 @@ export default Ember.Controller.extend({
+       }).finally(()=>{
+         this.set('loadingMore', false);
+       });
++    },
++
++    toggleSetUserTitle() {
++      return this.toggleProperty('hiddenSetTitle');
+     }
+   },
+ 
+diff --git a/app/assets/javascripts/discourse/routes/badges-show.js.es6 b/app/assets/javascripts/discourse/routes/badges-show.js.es6
+index 3545598528..e5d1aae23c 100644
+--- a/app/assets/javascripts/discourse/routes/badges-show.js.es6
++++ b/app/assets/javascripts/discourse/routes/badges-show.js.es6
+@@ -30,9 +30,20 @@ export default Discourse.Route.extend({
+   afterModel(model, transition) {
+     const username = transition.queryParams && transition.queryParams.username;
+ 
+-    return UserBadge.findByBadgeId(model.get("id"), {username}).then(userBadges => {
+-      this.userBadges = userBadges;
++    const userBadgesGrant = UserBadge.findByBadgeId(model.get("id"), {username}).then(userBadges => {
++      this.userBadgesGrant = userBadges;
+     });
++
++    const userBadgesAll = UserBadge.findByUsername(username).then(userBadges => {
++      this.userBadgesAll = userBadges;
++    });
++
++    const promises = {
++      userBadgesGrant,
++      userBadgesAll,
++    };
++
++    return Ember.RSVP.hash(promises);
+   },
+ 
+   titleToken() {
+@@ -42,8 +53,10 @@ export default Discourse.Route.extend({
+     }
+   },
+ 
++
+   setupController(controller, model) {
+     controller.set("model", model);
+-    controller.set("userBadges", this.userBadges);
++    controller.set("userBadges", this.userBadgesGrant);
++    controller.set("userBadgesAll", this.userBadgesAll);
+   }
+ });
+diff --git a/app/assets/javascripts/discourse/templates/badges/show.hbs b/app/assets/javascripts/discourse/templates/badges/show.hbs
+index 3ac5e04965..16eacce849 100644
+--- a/app/assets/javascripts/discourse/templates/badges/show.hbs
++++ b/app/assets/javascripts/discourse/templates/badges/show.hbs
+@@ -7,11 +7,21 @@
+ 
+   <div class='show-badge-details'>
+     {{badge-card badge=model size="large" count=userBadges.grant_count}}
+-    <div class='badge-grant-info'>
++    <div class='badge-grant-info {{if hiddenSetTitle '' 'hidden'}}'>
+       <div>
+         {{#if model.allow_title}}
+           <div class='grant-info-item'>
+             {{i18n 'badges.allow_title'}}
++            {{#if userBadges}}
++              {{#each userBadges as |ub|}}
++                {{#if model.allow_title}}
++                  {{d-button
++                      class='btn btn-small pad-left no-text'
++                      action='toggleSetUserTitle'
++                      icon='pencil'}}
++                {{/if}}
++              {{/each}}
++            {{/if}}
+           </div>
+         {{/if}}
+         {{#if model.multiple_grant}}
+@@ -21,6 +31,10 @@
+         {{/if}}
+       </div>
+     </div>
++    <div class='badge-set-title {{if hiddenSetTitle 'hidden' ''}}'>
++      {{badge-title selectableUserBadges=selectableUserBadges user=user}}
++      <button class='btn btn-default close-btn' {{action "toggleSetUserTitle"}}>{{i18n 'close'}}</button>
++    </div>
+   </div>
+ 
+   {{#if userBadges}}
+diff --git a/app/assets/javascripts/discourse/templates/components/badge-title.hbs b/app/assets/javascripts/discourse/templates/components/badge-title.hbs
+new file mode 100644
+index 0000000000..f212e7c7f0
+--- /dev/null
++++ b/app/assets/javascripts/discourse/templates/components/badge-title.hbs
+@@ -0,0 +1,25 @@
++<section class='user-content'>
++  <form class="form-horizontal">
++
++    <div class="control-group">
++      <div class="controls">
++        <h3>{{i18n 'badges.select_badge_for_title'}}</h3>
++      </div>
++    </div>
++
++    <div class="control-group">
++      <label class="control-label"></label>
++      <div class="controls">
++        {{combo-box valueAttribute="id" value=selectedUserBadgeId nameProperty="badge.name" content=selectableUserBadges}}
++      </div>
++    </div>
++
++    <div class="control-group">
++      <div class="controls">
++        <button class="btn btn-primary" disabled={{disableSave}} {{action "save"}}> {{savingStatus}} </button>
++        {{#if saved}}{{i18n 'saved'}}{{/if}}
++      </div>
++    </div>
++
++  </form>
++</section>
+diff --git a/app/assets/javascripts/discourse/templates/user/badge-title.hbs b/app/assets/javascripts/discourse/templates/user/badge-title.hbs
+index dcad8ac772..f51fbd234b 100644
+--- a/app/assets/javascripts/discourse/templates/user/badge-title.hbs
++++ b/app/assets/javascripts/discourse/templates/user/badge-title.hbs
+@@ -1,25 +1 @@
+-<section class='user-content'>
+-  <form class="form-horizontal">
+-
+-    <div class="control-group">
+-      <div class="controls">
+-        <h3>{{i18n 'badges.select_badge_for_title'}}</h3>
+-      </div>
+-    </div>
+-
+-    <div class="control-group">
+-      <label class="control-label"></label>
+-      <div class="controls">
+-        {{combo-box valueAttribute="id" value=selectedUserBadgeId nameProperty="badge.name" content=selectableUserBadges}}
+-      </div>
+-    </div>
+-
+-    <div class="control-group">
+-      <div class="controls">
+-        <button class="btn btn-primary" disabled={{disableSave}} {{action "save"}}>{{savingStatus}}</button>
+-        {{#if saved}}{{i18n 'saved'}}{{/if}}
+-      </div>
+-    </div>
+-
+-  </form>
+-</section>
++{{badge-title selectableUserBadges=selectableUserBadges user=user}}
+diff --git a/app/assets/stylesheets/common/base/user-badges.scss b/app/assets/stylesheets/common/base/user-badges.scss
+index 7e98f3c2c0..5d155ddb00 100644
+--- a/app/assets/stylesheets/common/base/user-badges.scss
++++ b/app/assets/stylesheets/common/base/user-badges.scss
+@@ -150,6 +150,7 @@
+     display: flex;
+     flex-direction: row;
+     min-height: 128px;
++    height: 100%;
+ 
+     .badge-icon {
+       min-width: 90px;
+@@ -228,11 +229,22 @@
+     display: flex;
+     align-items: center;
+     margin-left: 1em;
++    &.hidden {
++      display: none;
++    }
+   }
+   .grant-info-item {
+     margin-bottom: 1em;
+     color: dark-light-choose(scale-color($primary, $lightness: 40%), scale-color($secondary, $lightness: 60%));
+   }
++
++  .badge-title .form-horizontal .controls {
++    margin-left: 20px;
++  }
++
++  .close-btn {
++    margin: -20px 0 0 20px;
++  }
+ }
+ 
+ .check-display {
+diff --git a/app/services/badge_granter.rb b/app/services/badge_granter.rb
+index f76ab063e8..5e88683cff 100644
+--- a/app/services/badge_granter.rb
++++ b/app/services/badge_granter.rb
+@@ -51,6 +51,7 @@ class BadgeGranter
+                 data: { badge_id: @badge.id,
+                         badge_name: @badge.display_name,
+                         badge_slug: @badge.slug,
++                        badge_title: @badge.allow_title,
+                         username: @user.username }.to_json
+               )
+               user_badge.update_attributes notification_id: notification.id
+@@ -327,6 +328,7 @@ class BadgeGranter
+                             badge_id: badge.id,
+                             badge_name: badge.display_name,
+                             badge_slug: badge.slug,
++                            badge_title: badge.allow_title,
+                             username: row.username
+         }.to_json)
+       end
+-- 
+2.14.1
+

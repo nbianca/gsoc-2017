@@ -1,0 +1,327 @@
+From 88dce0b9f5ccdbede2ae4706a41f42b765cf5923 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Tue, 18 Jul 2017 23:59:45 +0100
+Subject: [PATCH] Quick access to bookmarks and messages on user menu.
+
+---
+ .../discourse/widgets/user-bookmarks.js.es6        | 75 ++++++++++++++++++++++
+ .../discourse/widgets/user-menu-item.js.es6        | 16 +++++
+ .../javascripts/discourse/widgets/user-menu.js.es6 | 54 ++++++++++++----
+ .../discourse/widgets/user-private-messages.js.es6 | 67 +++++++++++++++++++
+ app/assets/stylesheets/common/base/menu-panel.scss | 12 +++-
+ config/locales/client.en.yml                       |  4 ++
+ 6 files changed, 215 insertions(+), 13 deletions(-)
+ create mode 100644 app/assets/javascripts/discourse/widgets/user-bookmarks.js.es6
+ create mode 100644 app/assets/javascripts/discourse/widgets/user-menu-item.js.es6
+ create mode 100644 app/assets/javascripts/discourse/widgets/user-private-messages.js.es6
+
+diff --git a/app/assets/javascripts/discourse/widgets/user-bookmarks.js.es6 b/app/assets/javascripts/discourse/widgets/user-bookmarks.js.es6
+new file mode 100644
+index 0000000000..e2aefb81db
+--- /dev/null
++++ b/app/assets/javascripts/discourse/widgets/user-bookmarks.js.es6
+@@ -0,0 +1,75 @@
++import { ajax } from 'discourse/lib/ajax';
++import { createWidget } from 'discourse/widgets/widget';
++import { h } from 'virtual-dom';
++import UserAction from 'discourse/models/user-action';
++
++export default createWidget('user-bookmarks', {
++  tagName: 'div.bookmarks',
++  buildKey: () => 'user-bookmarks',
++
++  defaultState() {
++    return { loading: false, loaded: false, content: [], hasOlder: false };
++  },
++
++  refreshBookmarks(state) {
++    if (state.loading) { return; }
++
++    const { currentUser } = this;
++
++    state.loading = true;
++    return ajax('/user_actions.json', {
++      cache: 'false',
++      data: {
++        username: currentUser.username,
++        filter: Discourse.UserAction.TYPES.bookmarks
++      }
++    }).then(result => {
++      if (result && result.user_actions) {
++        const copy = Em.A();
++        let i = 0;
++        result.user_actions.forEach(function(action) {
++          if (++i > 5) {
++            state.hasOlder = true;
++            return;
++          }
++          action.title = Handlebars.Utils.escapeExpression(action.title);
++          copy.pushObject(UserAction.create(action));
++        });
++        state.content.pushObjects(UserAction.collapseStream(copy));
++      }
++    }).finally(() => {
++      state.loading = false;
++      state.loaded = true;
++      this.scheduleRerender();
++    });
++  },
++
++  html(attrs, state) {
++    if (!state.loaded) {
++      this.refreshBookmarks(state);
++    }
++
++    if (state.loading) {
++      return [ h('hr'), h('div.spinner-container', h('div.spinner')) ];
++    }
++
++    const elems = [
++      h('hr'),
++      h('ul.menu-bookmarks', state.content.map(bookmark => this.attach('user-menu-item', {
++        href: bookmark.get('postUrl'),
++        icon: 'bookmark',
++        title: bookmark.title,
++      }))),
++    ];
++
++    if (state.hasOlder || state.content.length === 0) {
++      elems.push(this.attach('link', {
++        href: `${attrs.path}/activity/bookmarks`,
++        label: (state.content.length === 0) ? 'user.no_bookmarks' : 'user.older_bookmarks'
++      }));
++    }
++
++    return elems;
++  },
++
++});
+diff --git a/app/assets/javascripts/discourse/widgets/user-menu-item.js.es6 b/app/assets/javascripts/discourse/widgets/user-menu-item.js.es6
+new file mode 100644
+index 0000000000..6bb2132513
+--- /dev/null
++++ b/app/assets/javascripts/discourse/widgets/user-menu-item.js.es6
+@@ -0,0 +1,16 @@
++import RawHtml from 'discourse/widgets/raw-html';
++import { createWidget } from 'discourse/widgets/widget';
++import { emojiUnescape } from 'discourse/lib/text';
++import { h } from 'virtual-dom';
++import { iconNode } from 'discourse/helpers/fa-icon-node';
++
++createWidget('user-menu-item', {
++  tagName: 'li',
++
++  html(attrs) {
++    return [
++      iconNode(attrs.icon), ' ',
++      h('a', { attributes: { href: attrs.href } }, new RawHtml({ html: '<span>' + emojiUnescape(attrs.title) + '</span>' }))
++    ];
++  }
++});
+diff --git a/app/assets/javascripts/discourse/widgets/user-menu.js.es6 b/app/assets/javascripts/discourse/widgets/user-menu.js.es6
+index bdb1c4ed9b..b20ba34e7a 100644
+--- a/app/assets/javascripts/discourse/widgets/user-menu.js.es6
++++ b/app/assets/javascripts/discourse/widgets/user-menu.js.es6
+@@ -31,13 +31,13 @@ createWidget('user-menu-links', {
+     glyphs.push({ label: 'user.bookmarks',
+                       className: 'user-bookmarks-link',
+                       icon: 'bookmark',
+-                      href: `${path}/activity/bookmarks` });
++                      action: 'toggleUserBookmarks' });
+ 
+     if (siteSettings.enable_private_messages) {
+       glyphs.push({ label: 'user.private_messages',
+                     className: 'user-pms-link',
+                     icon: 'envelope',
+-                    href: `${path}/messages` });
++                    action: 'togglePrivateMessages' });
+     }
+ 
+     const profileLink = {
+@@ -83,19 +83,48 @@ createWidget('user-menu-links', {
+ 
+ export default createWidget('user-menu', {
+   tagName: 'div.user-menu',
++  buildKey: () => 'user-menu',
++
++  defaultState() {
++    return {
++      userBookmarks: false,
++      privateMessages: false,
++    };
++  },
++
++  toggleUserBookmarks() {
++    this.state.userBookmarks = !this.state.userBookmarks;
++    this.state.privateMessages = false;
++  },
++
++  togglePrivateMessages() {
++    this.state.userBookmarks = false;
++    this.state.privateMessages = !this.state.privateMessages;
++  },
+ 
+   panelContents() {
+     const path = this.currentUser.get('path');
+ 
+-    return [this.attach('user-menu-links', { path }),
+-            this.attach('user-notifications', { path }),
+-            h('div.logout-link', [
+-              h('ul.menu-links',
+-                h('li', this.attach('link', { action: 'logout',
+-                                                       className: 'logout',
+-                                                       icon: 'sign-out',
+-                                                       label: 'user.log_out' })))
+-              ])];
++    const panels = [];
++    panels.push(this.attach('user-menu-links', { path }));
++
++    if (this.state.userBookmarks) {
++      panels.push(this.attach('user-bookmarks', { path }));
++    } else if (this.state.privateMessages) {
++      panels.push(this.attach('user-private-messages', { path }));
++    } else {
++      panels.push(this.attach('user-notifications', { path }));
++    }
++
++    panels.push(h('div.logout-link', [
++      h('ul.menu-links',
++        h('li', this.attach('link', { action: 'logout',
++                                      className: 'logout',
++                                      icon: 'sign-out',
++                                      label: 'user.log_out' })))
++      ]));
++
++    return panels;
+   },
+ 
+   html() {
+@@ -104,5 +133,6 @@ export default createWidget('user-menu', {
+ 
+   clickOutside() {
+     this.sendWidgetAction('toggleUserMenu');
+-  }
++  },
++
+ });
+diff --git a/app/assets/javascripts/discourse/widgets/user-private-messages.js.es6 b/app/assets/javascripts/discourse/widgets/user-private-messages.js.es6
+new file mode 100644
+index 0000000000..56aa34e432
+--- /dev/null
++++ b/app/assets/javascripts/discourse/widgets/user-private-messages.js.es6
+@@ -0,0 +1,67 @@
++import { ajax } from 'discourse/lib/ajax';
++import { createWidget } from 'discourse/widgets/widget';
++import { h } from 'virtual-dom';
++import Topic from 'discourse/models/topic';
++
++export default createWidget('user-private-messages', {
++  tagName: 'div.private-messages',
++  buildKey: () => 'user-private-messages',
++
++  defaultState() {
++    return { loading: false, loaded: false, content: [], hasOlder: false };
++  },
++
++  refreshPrivateMessages(state) {
++    if (state.loading) { return; }
++
++    const { currentUser } = this;
++
++    state.loading = true;
++    return ajax('/topics/private-messages/' + currentUser.username + '.json', {cache: 'false'}).then(result => {
++      if (result && result.topic_list && result.topic_list.topics) {
++        let i = 0;
++        result.topic_list.topics.forEach(function(topic) {
++          if (++i > 5) {
++            state.hasOlder = true;
++            return;
++          }
++          topic.title = Handlebars.Utils.escapeExpression(topic.title);
++          state.content.pushObject(Topic.create(topic));
++        });
++      }
++    }).finally(() => {
++      state.loading = false;
++      state.loaded = true;
++      this.scheduleRerender();
++    });
++  },
++
++  html(attrs, state) {
++    if (!state.loaded) {
++      this.refreshPrivateMessages(state);
++    }
++
++    if (state.loading) {
++      return [ h('hr'), h('div.spinner-container', h('div.spinner')) ];
++    }
++
++    const elems = [
++      h('hr'),
++      h('ul.menu-private-messages', state.content.map(pm => this.attach('user-menu-item', {
++        href: pm.get('lastUnreadUrl'),
++        icon: 'envelope',
++        title: pm.title,
++      }))),
++    ];
++
++    if (state.hasOlder || state.content.length === 0) {
++      elems.push(this.attach('link', {
++        href: `${attrs.path}/messages`,
++        label: (state.content.length === 0) ? 'user.no_pms' : 'user.older_pms'
++      }));
++    }
++
++    return elems;
++  },
++
++});
+diff --git a/app/assets/stylesheets/common/base/menu-panel.scss b/app/assets/stylesheets/common/base/menu-panel.scss
+index 10d2de5b67..d4ab3a7a3b 100644
+--- a/app/assets/stylesheets/common/base/menu-panel.scss
++++ b/app/assets/stylesheets/common/base/menu-panel.scss
+@@ -201,7 +201,13 @@
+ 
+ .user-menu {
+ 
+-  .notifications {
++  .bookmark, .pm {
++    i {
++      padding: 3px;
++    }
++  }
++
++  .bookmarks, .private-messages, .notifications {
+     h3 {
+       padding: 0 0.4em;
+       font-weight: bold;
+@@ -252,6 +258,10 @@
+     /* as a big ol' click target, don't let text inside be selected */
+     @include unselectable;
+   }
++
++  .notifications li {
++    background-color: dark-light-diff($tertiary, $secondary, 85%, -65%);
++  }
+ }
+ 
+ .notifications .logout {
+diff --git a/config/locales/client.en.yml b/config/locales/client.en.yml
+index c11c8052bb..895fa3b52f 100644
+--- a/config/locales/client.en.yml
++++ b/config/locales/client.en.yml
+@@ -569,6 +569,10 @@ en:
+       private_message: "Message"
+       private_messages: "Messages"
+       activity_stream: "Activity"
++      older_bookmarks: "view older bookmarks..."
++      no_bookmarks: "You have no bookmarks."
++      older_pms: "view older messages..."
++      no_pms: "You have no private messages."
+       preferences: "Preferences"
+       expand_profile: "Expand"
+       bookmarks: "Bookmarks"
+-- 
+2.14.1
+

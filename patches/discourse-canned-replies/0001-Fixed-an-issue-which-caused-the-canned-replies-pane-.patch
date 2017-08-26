@@ -1,0 +1,29 @@
+From 3f531fbd2a149685dfd5488f605794698d3f32b0 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Wed, 12 Jul 2017 18:35:44 +0100
+Subject: [PATCH] Fixed an issue which caused the canned replies pane to be
+ shown only once.
+
+---
+ .../discourse/connectors/editor-preview/canned-replies.js.es6        | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/assets/javascripts/discourse/connectors/editor-preview/canned-replies.js.es6 b/assets/javascripts/discourse/connectors/editor-preview/canned-replies.js.es6
+index 22cdb4f..7ca9cd4 100644
+--- a/assets/javascripts/discourse/connectors/editor-preview/canned-replies.js.es6
++++ b/assets/javascripts/discourse/connectors/editor-preview/canned-replies.js.es6
+@@ -24,6 +24,11 @@ export default {
+       });
+     }
+ 
++    component.appEvents.on('composer:will-close', () => {
++      component.appEvents.off('canned-replies:show');
++      component.appEvents.off('canned-replies:hide');
++    });
++
+     component.addObserver('listFilter', function () {
+       const filterTitle = component.get('listFilter').toLowerCase();
+       const filtered = component.get('replies').map(function (reply) {
+-- 
+2.14.1
+

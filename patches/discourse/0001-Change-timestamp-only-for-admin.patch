@@ -1,0 +1,34 @@
+From 8354768d7cb1a7deb634614f66df3074bb92103b Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Tue, 14 Mar 2017 23:06:37 +0200
+Subject: [PATCH] Change timestamp only for admin.
+
+---
+ .../javascripts/discourse/widgets/topic-admin-menu.js.es6     | 11 +++++++----
+ 1 file changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/app/assets/javascripts/discourse/widgets/topic-admin-menu.js.es6 b/app/assets/javascripts/discourse/widgets/topic-admin-menu.js.es6
+index 5269f44a34..699dd78142 100644
+--- a/app/assets/javascripts/discourse/widgets/topic-admin-menu.js.es6
++++ b/app/assets/javascripts/discourse/widgets/topic-admin-menu.js.es6
+@@ -137,10 +137,13 @@ export default createWidget('topic-admin-menu', {
+                      icon: 'thumb-tack',
+                      label: featured ? 'actions.unpin' : 'actions.pin' });
+     }
+-    buttons.push({ className: 'topic-admin-change-timestamp',
+-                   action: 'showChangeTimestamp',
+-                   icon: 'calendar',
+-                   label: 'change_timestamp.title' });
++
++    if (this.currentUser.admin) {
++      buttons.push({ className: 'topic-admin-change-timestamp',
++                     action: 'showChangeTimestamp',
++                     icon: 'calendar',
++                     label: 'change_timestamp.title' });
++    }
+ 
+     if (!isPrivateMessage) {
+       buttons.push({ className: 'topic-admin-archive',
+-- 
+2.14.1
+

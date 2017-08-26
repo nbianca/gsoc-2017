@@ -1,0 +1,44 @@
+From 9a9d8a7036624d997e62ff998b959983701a01a5 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Sat, 1 Jul 2017 00:08:12 +0300
+Subject: [PATCH] Added README.
+
+---
+ README.md | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+ create mode 100644 README.md
+
+diff --git a/README.md b/README.md
+new file mode 100644
+index 0000000..6bc80ff
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1,25 @@
++Discourse .GIF to .MP4
++======================
++
++Installation
++------------
++
++Simply clone this Git repository in the `plugins` folder of your Discourse installation.
++
++Dependencies
++------------
++
++* ffmpeg
++
++Why MP4?
++--------
++
++#### Advantages
++
++* Smaller size
++* Saves bandwidth
++* Better quality
++* Support for audio (irrelevant in this case anyway)
++
++#### Disadvantages
++* Requires a modern browser
+-- 
+2.14.1
+

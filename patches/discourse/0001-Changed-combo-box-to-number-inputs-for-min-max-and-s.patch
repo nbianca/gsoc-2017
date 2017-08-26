@@ -1,0 +1,101 @@
+From c42354420897fbc32ce605257d6ea4b1d0f64a9b Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Tue, 14 Mar 2017 18:34:30 +0200
+Subject: [PATCH] Changed combo-box to number inputs for min, max and step
+ values.
+
+---
+ .../javascripts/controllers/poll-ui-builder.js.es6 | 17 ++++++++++++---
+ .../discourse/templates/modal/poll-ui-builder.hbs  | 25 +++++++++++-----------
+ plugins/poll/config/locales/client.en.yml          |  1 +
+ 3 files changed, 28 insertions(+), 15 deletions(-)
+
+diff --git a/plugins/poll/assets/javascripts/controllers/poll-ui-builder.js.es6 b/plugins/poll/assets/javascripts/controllers/poll-ui-builder.js.es6
+index 391a5d76ac..19cfc33d6d 100644
+--- a/plugins/poll/assets/javascripts/controllers/poll-ui-builder.js.es6
++++ b/plugins/poll/assets/javascripts/controllers/poll-ui-builder.js.es6
+@@ -120,9 +120,20 @@ export default Ember.Controller.extend({
+     return output;
+   },
+ 
+-  @computed("pollOptionsCount", "isNumber")
+-  disableInsert(count, isNumber) {
+-    return isNumber ? false : (count < 2);
++  @computed("pollOptionsCount", "isNumber", "pollMin", "pollMax")
++  disableInsert(count, isNumber, pollMin, pollMax) {
++    return (pollMin >= pollMax) || (isNumber ? false : (count < 2));
++  },
++
++  @computed("pollMin", "pollMax")
++  minMaxValueValidation(pollMin, pollMax) {
++    let options = { ok: true };
++
++    if (pollMin >= pollMax) {
++      options = { failed: true, reason: I18n.t("poll.ui_builder.help.invalid_values") };
++    }
++
++    return InputValidation.create(options);
+   },
+ 
+   @computed("disableInsert")
+diff --git a/plugins/poll/assets/javascripts/discourse/templates/modal/poll-ui-builder.hbs b/plugins/poll/assets/javascripts/discourse/templates/modal/poll-ui-builder.hbs
+index a3e7566f58..50ed74ce9b 100644
+--- a/plugins/poll/assets/javascripts/discourse/templates/modal/poll-ui-builder.hbs
++++ b/plugins/poll/assets/javascripts/discourse/templates/modal/poll-ui-builder.hbs
+@@ -11,28 +11,29 @@
+     {{#if showMinMax}}
+       <div class="input-group">
+         <label class="input-group-label">{{i18n 'poll.ui_builder.poll_config.min'}}</label>
+-        {{combo-box content=pollMinOptions
+-                    value=pollMin
+-                    valueAttribute="value"
+-                    class="poll-options-min"}}
++        {{input type='number'
++                value=pollMin
++                valueAttribute="value"
++                class="poll-options-min"}}
++        {{input-tip validation=minMaxValueValidation}}
+       </div>
+ 
+ 
+       <div class="input-group">
+         <label class="input-group-label">{{i18n 'poll.ui_builder.poll_config.max'}}</label>
+-        {{combo-box content=pollMaxOptions
+-                    value=pollMax
+-                    valueAttribute="value"
+-                    class="poll-options-max"}}
++        {{input type='number'
++                value=pollMax
++                valueAttribute="value"
++                class="poll-options-max"}}
+       </div>
+ 
+       {{#if isNumber}}
+         <div class="input-group">
+           <label class="input-group-label">{{i18n 'poll.ui_builder.poll_config.step'}}</label>
+-          {{combo-box content=pollStepOptions
+-                      value=pollStep
+-                      valueAttribute="value"
+-                      class="poll-options-step"}}
++          {{input type='number'
++                  value=pollStep
++                  valueAttribute="value"
++                  class="poll-options-step"}}
+         </div>
+       {{/if}}
+     {{/if}}
+diff --git a/plugins/poll/config/locales/client.en.yml b/plugins/poll/config/locales/client.en.yml
+index d70520a375..f2d8cb01d2 100644
+--- a/plugins/poll/config/locales/client.en.yml
++++ b/plugins/poll/config/locales/client.en.yml
+@@ -74,6 +74,7 @@ en:
+         insert: Insert Poll
+         help:
+           options_count: Enter at least 2 options
++          invalid_values: Minimum value must be smaller than the maximum value.
+         poll_type:
+           label: Type
+           regular: Single Choice
+-- 
+2.14.1
+

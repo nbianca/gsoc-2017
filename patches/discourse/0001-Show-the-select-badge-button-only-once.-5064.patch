@@ -1,0 +1,37 @@
+From e976b98efc0a6128226c28880ecc30403f9e38e3 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nbianca@users.noreply.github.com>
+Date: Fri, 18 Aug 2017 19:00:20 +0100
+Subject: [PATCH] Show the select badge button only once. (#5064)
+
+---
+ app/assets/javascripts/discourse/templates/badges/show.hbs | 14 ++++++--------
+ 1 file changed, 6 insertions(+), 8 deletions(-)
+
+diff --git a/app/assets/javascripts/discourse/templates/badges/show.hbs b/app/assets/javascripts/discourse/templates/badges/show.hbs
+index 16eacce849..b834a798c6 100644
+--- a/app/assets/javascripts/discourse/templates/badges/show.hbs
++++ b/app/assets/javascripts/discourse/templates/badges/show.hbs
+@@ -13,14 +13,12 @@
+           <div class='grant-info-item'>
+             {{i18n 'badges.allow_title'}}
+             {{#if userBadges}}
+-              {{#each userBadges as |ub|}}
+-                {{#if model.allow_title}}
+-                  {{d-button
+-                      class='btn btn-small pad-left no-text'
+-                      action='toggleSetUserTitle'
+-                      icon='pencil'}}
+-                {{/if}}
+-              {{/each}}
++              {{#if model.allow_title}}
++                {{d-button
++                    class='btn btn-small pad-left no-text'
++                    action='toggleSetUserTitle'
++                    icon='pencil'}}
++              {{/if}}
+             {{/if}}
+           </div>
+         {{/if}}
+-- 
+2.14.1
+

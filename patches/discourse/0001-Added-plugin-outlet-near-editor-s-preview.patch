@@ -1,0 +1,26 @@
+From 81dc1f039d39bdeb288941e2deb4fb0c2a108974 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Mon, 26 Jun 2017 12:13:27 +0300
+Subject: [PATCH] Added plugin outlet near editor's preview.
+
+---
+ app/assets/javascripts/discourse/templates/components/d-editor.hbs | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/app/assets/javascripts/discourse/templates/components/d-editor.hbs b/app/assets/javascripts/discourse/templates/components/d-editor.hbs
+index dacde9aa74..4c7366b81e 100644
+--- a/app/assets/javascripts/discourse/templates/components/d-editor.hbs
++++ b/app/assets/javascripts/discourse/templates/components/d-editor.hbs
+@@ -28,7 +28,8 @@
+ 
+   <div class="d-editor-preview-wrapper {{if forcePreview 'force-preview'}}">
+     <div class="d-editor-preview">
+-      {{{preview}}}
++      <div class="d-editor-cooked">{{{preview}}}</div>
++      <div class="d-editor-plugin">{{plugin-outlet name="editor-preview"}}</div>
+     </div>
+   </div>
+ </div>
+-- 
+2.14.1
+

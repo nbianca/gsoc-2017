@@ -1,0 +1,25 @@
+From 2c22a7f78bb70a3645c38fa81012569b77b7bf7e Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Wed, 1 Mar 2017 23:02:29 +0200
+Subject: [PATCH] Fixed typo.
+
+---
+ .../discourse/initializers/subscribe-user-notifications.js.es6          | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/app/assets/javascripts/discourse/initializers/subscribe-user-notifications.js.es6 b/app/assets/javascripts/discourse/initializers/subscribe-user-notifications.js.es6
+index 8061b579b9..e8723b6af1 100644
+--- a/app/assets/javascripts/discourse/initializers/subscribe-user-notifications.js.es6
++++ b/app/assets/javascripts/discourse/initializers/subscribe-user-notifications.js.es6
+@@ -55,7 +55,7 @@ export default {
+           const staleIndex = _.findIndex(oldNotifications, {id: lastNotification.id});
+ 
+           if (staleIndex === -1) {
+-            // this gets a bit tricky, uread pms are bumped to front
++            // this gets a bit tricky, unread pms are bumped to front
+             let insertPosition = 0;
+             if (lastNotification.notification_type !== 6) {
+               insertPosition = _.findIndex(oldNotifications, n => n.notification_type !== 6 || n.read);
+-- 
+2.14.1
+

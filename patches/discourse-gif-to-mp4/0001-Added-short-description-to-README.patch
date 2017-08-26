@@ -1,0 +1,26 @@
+From 0cff4742dd9745df34555b135b708a368b3a7db3 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Sat, 1 Jul 2017 00:09:58 +0300
+Subject: [PATCH] Added short description to README.
+
+---
+ README.md | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/README.md b/README.md
+index 6bc80ff..06d19dc 100644
+--- a/README.md
++++ b/README.md
+@@ -1,5 +1,7 @@
+-Discourse .GIF to .MP4
+-======================
++Discourse GIF to MP4
++====================
++
++This plugin converts automatically all GIF uploads to MP4 videos.
+ 
+ Installation
+ ------------
+-- 
+2.14.1
+

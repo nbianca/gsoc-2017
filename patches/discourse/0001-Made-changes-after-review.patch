@@ -1,0 +1,202 @@
+From d3e825cb594ba5fa9606a6ac3d884a97c259f8d6 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Mon, 21 Aug 2017 21:24:27 +0100
+Subject: [PATCH] Made changes after review.
+
+---
+ .../discourse/components/user-selector.js.es6      |  5 ++-
+ app/serializers/current_user_serializer.rb         |  5 +++
+ config/locales/server.en.yml                       |  2 +-
+ config/site_settings.yml                           |  5 ++-
+ lib/guardian.rb                                    | 11 +++++++
+ lib/topic_creator.rb                               | 38 ++++++++--------------
+ spec/components/topic_creator_spec.rb              |  2 +-
+ 7 files changed, 40 insertions(+), 28 deletions(-)
+
+diff --git a/app/assets/javascripts/discourse/components/user-selector.js.es6 b/app/assets/javascripts/discourse/components/user-selector.js.es6
+index 1bc2d0eda1..c583960abe 100644
+--- a/app/assets/javascripts/discourse/components/user-selector.js.es6
++++ b/app/assets/javascripts/discourse/components/user-selector.js.es6
+@@ -42,8 +42,11 @@ export default TextField.extend({
+       updateData: (opts && opts.updateData) ? opts.updateData : false,
+ 
+       dataSource: function(term) {
++        const termRegex = Discourse.User.currentProp('can_send_private_email_messages') ?
++          /[^a-zA-Z0-9_\-\.@\+]/ : /[^a-zA-Z0-9_\-\.]/;
++
+         var results = userSearch({
+-          term: term.replace(/[^a-zA-Z0-9_\-\.@\+]/, ''),
++          term: term.replace(termRegex, ''),
+           topicId: self.get('topicId'),
+           exclude: excludedUsernames(),
+           includeGroups,
+diff --git a/app/serializers/current_user_serializer.rb b/app/serializers/current_user_serializer.rb
+index ddf6219899..b7489167f4 100644
+--- a/app/serializers/current_user_serializer.rb
++++ b/app/serializers/current_user_serializer.rb
+@@ -18,6 +18,7 @@ class CurrentUserSerializer < BasicUserSerializer
+              :external_links_in_new_tab,
+              :dynamic_favicon,
+              :trust_level,
++             :can_send_private_email_messages,
+              :can_edit,
+              :can_invite_to_forum,
+              :no_password,
+@@ -87,6 +88,10 @@ class CurrentUserSerializer < BasicUserSerializer
+     PostAction.flagged_posts_count
+   end
+ 
++  def can_send_private_email_messages
++    scope.cand_send_private_messages_to_email?
++  end
++
+   def can_edit
+     true
+   end
+diff --git a/config/locales/server.en.yml b/config/locales/server.en.yml
+index 8731c1f332..5699f1f841 100644
+--- a/config/locales/server.en.yml
++++ b/config/locales/server.en.yml
+@@ -383,7 +383,6 @@ en:
+               cant_send_pm: "Sorry, you cannot send a private message to that user."
+               no_user_selected: "You must select a valid user."
+               reply_by_email_disabled: "Reply by email has been disabled."
+-              pm_email_tl_insufficient: "At least trust level 3 is required to send private messages to email addresses."
+             featured_link:
+               invalid: "is invalid. URL should include http:// or https://."
+               invalid_category: "can't be edited in this category."
+@@ -1012,6 +1011,7 @@ en:
+     summary_max_results: "Maximum posts returned by 'Summary This Topic'"
+ 
+     enable_private_messages: "Allow trust level 1 (configurable via min trust level to send messages) users to create messages and reply to messages. Note that staff can always send messages no matter what."
++    enable_private_email_messages: "Allow trust level 4 (configurable via min trust level to send messages) users to send private email messages. Note that staff can always send messages no matter what."
+ 
+     enable_long_polling: "Message bus used for notification can use long polling"
+     long_polling_base_url: "Base URL used for long polling (when a CDN is serving dynamic content, be sure to set this to origin pull) eg: http://origin.site.com"
+diff --git a/config/site_settings.yml b/config/site_settings.yml
+index 439c9a9b9e..5e448a64ea 100644
+--- a/config/site_settings.yml
++++ b/config/site_settings.yml
+@@ -508,6 +508,9 @@ posting:
+   enable_private_messages:
+     default: true
+     client: true
++  enable_private_email_messages:
++    default: false
++    client: true
+   editing_grace_period: 300
+   post_edit_time_limit:
+     default: 86400
+@@ -858,7 +861,7 @@ trust:
+     default: 1
+     enum: 'TrustLevelSetting'
+   min_trust_to_send_email_messages:
+-    default: 3
++    default: 4
+     enum: 'TrustLevelSetting'
+   tl1_requires_topics_entered: 5
+   tl1_requires_read_posts:
+diff --git a/lib/guardian.rb b/lib/guardian.rb
+index dd75225f82..ba81c4cd72 100644
+--- a/lib/guardian.rb
++++ b/lib/guardian.rb
+@@ -299,6 +299,17 @@ class Guardian
+     (!is_blocked? || target.staff?)
+   end
+ 
++  def cand_send_private_messages_to_email?
++    # Staged users must be enabled to create a temporary user.
++    SiteSetting.enable_staged_users? &&
++    # User is authenticated
++    authenticated? &&
++    # User is trusted enough
++    @user.has_trust_level?(SiteSetting.min_trust_to_send_email_messages) &&
++    # PMs to email addresses are enabled
++    (is_staff? || SiteSetting.enable_private_email_messages)
++  end
++
+   def can_see_emails?
+     @can_see_emails
+   end
+diff --git a/lib/topic_creator.rb b/lib/topic_creator.rb
+index 08b50b8bfb..19b656d5fb 100644
+--- a/lib/topic_creator.rb
++++ b/lib/topic_creator.rb
+@@ -166,12 +166,8 @@ class TopicCreator
+       rollback_with!(topic, :no_user_selected)
+     end
+ 
+-    if @opts[:target_emails].present?
+-      if !SiteSetting.reply_by_email_enabled? || !SiteSetting.enable_staged_users? then
+-        rollback_with!(topic, :reply_by_email_disabled)
+-      elsif @user.trust_level < SiteSetting.min_trust_to_send_email_messages then
+-        rollback_with!(topic, :pm_email_tl_insufficient)
+-      end
++    if @opts[:target_emails].present? && !@guardian.cand_send_private_messages_to_email? then
++      rollback_with!(topic, :reply_by_email_disabled)
+     end
+ 
+     add_users(topic, @opts[:target_usernames])
+@@ -241,27 +237,21 @@ class TopicCreator
+   end
+ 
+   def find_or_create_user(email, display_name)
+-    user = nil
+-
+-    User.transaction do
+-      begin
+-        user = User.find_by_email(email)
+-
+-        if user.nil? && SiteSetting.enable_staged_users
+-          username = UserNameSuggester.sanitize_username(display_name) if display_name.present?
+-          user = User.create!(
+-            email: email,
+-            username: UserNameSuggester.suggest(username.presence || email),
+-            name: display_name.presence || User.suggest_name(email),
+-            staged: true
+-          )
+-        end
+-      rescue
+-        user = nil
+-      end
++    user = User.find_by_email(email)
++
++    if user.nil? && SiteSetting.enable_staged_users
++      username = UserNameSuggester.sanitize_username(display_name) if display_name.present?
++      user = User.create!(
++        email: email,
++        username: UserNameSuggester.suggest(username.presence || email),
++        name: display_name.presence || User.suggest_name(email),
++        staged: true
++      )
+     end
+ 
+     user
++  rescue
++    rollback_with!(topic, :target_user_not_found)
+   end
+ 
+ end
+diff --git a/spec/components/topic_creator_spec.rb b/spec/components/topic_creator_spec.rb
+index 4459302e36..184c5da9d7 100644
+--- a/spec/components/topic_creator_spec.rb
++++ b/spec/components/topic_creator_spec.rb
+@@ -59,7 +59,6 @@ describe TopicCreator do
+           TopicCreator.any_instance.expects(:save_topic).returns(true)
+           TopicCreator.any_instance.expects(:watch_topic).returns(true)
+           SiteSetting.allow_duplicate_topic_titles = true
+-          SiteSetting.reply_by_email_enabled = true
+           SiteSetting.enable_staged_users = true
+         end
+ 
+@@ -73,6 +72,7 @@ describe TopicCreator do
+         end
+ 
+         it "should be possible for a trusted user to send private messages via email" do
++          SiteSetting.enable_private_email_messages = true
+           SiteSetting.min_trust_to_send_email_messages = TrustLevel[1]
+           expect(TopicCreator.create(user, Guardian.new(user), pm_to_email_valid_attrs)).to be_valid
+         end
+-- 
+2.14.1
+

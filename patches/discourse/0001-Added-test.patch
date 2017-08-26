@@ -1,0 +1,52 @@
+From 1c917cc391e6d9b92d7cefed1e1cc1c9704d3ea4 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Mon, 10 Jul 2017 23:25:29 +0100
+Subject: [PATCH] Added test.
+
+---
+ spec/components/topic_query_spec.rb | 29 +++++++++++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+diff --git a/spec/components/topic_query_spec.rb b/spec/components/topic_query_spec.rb
+index 4d542032e4..e3cb344d94 100644
+--- a/spec/components/topic_query_spec.rb
++++ b/spec/components/topic_query_spec.rb
+@@ -67,6 +67,35 @@ describe TopicQuery do
+ 
+   end
+ 
++  context "prioritize_pinned_topics" do
++
++    it "does the pagination correctly" do
++
++      num_topics = 15
++      per_page = 3
++
++      topics = []
++      (num_topics - 1).downto(0).each do |i|
++         topics[i] = Fabricate(:topic)
++      end
++
++      topic_query = TopicQuery.new(user)
++      results = topic_query.send(:default_results)
++
++      expect(topic_query.prioritize_pinned_topics(results, {
++        :per_page => per_page,
++        :page => 0
++      })).to eq(topics[0...per_page])
++
++      expect(topic_query.prioritize_pinned_topics(results, {
++        :per_page => per_page,
++        :page => 1
++      })).to eq(topics[per_page...num_topics])
++
++    end
++
++  end
++
+   context 'bookmarks' do
+     it "filters and returns bookmarks correctly" do
+       post = Fabricate(:post)
+-- 
+2.14.1
+

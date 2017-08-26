@@ -1,0 +1,273 @@
+From bd9199f6937bfa4079132074f403e1bab5e0a0d5 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Mon, 24 Jul 2017 23:47:42 +0100
+Subject: [PATCH] Added support for sending PMs to email addresses.
+
+---
+ .../discourse/components/user-selector.js.es6      |  2 +-
+ .../javascripts/discourse/lib/user-search.js.es6   | 10 +++-
+ .../templates/user-selector-autocomplete.raw.hbs   | 12 +++++
+ app/controllers/posts_controller.rb                |  3 ++
+ config/locales/server.en.yml                       |  4 ++
+ config/site_settings.yml                           |  3 ++
+ lib/topic_creator.rb                               | 53 +++++++++++++++++++++-
+ spec/components/topic_creator_spec.rb              | 13 ++++++
+ 8 files changed, 97 insertions(+), 3 deletions(-)
+
+diff --git a/app/assets/javascripts/discourse/components/user-selector.js.es6 b/app/assets/javascripts/discourse/components/user-selector.js.es6
+index 99bfeba07c..1bc2d0eda1 100644
+--- a/app/assets/javascripts/discourse/components/user-selector.js.es6
++++ b/app/assets/javascripts/discourse/components/user-selector.js.es6
+@@ -43,7 +43,7 @@ export default TextField.extend({
+ 
+       dataSource: function(term) {
+         var results = userSearch({
+-          term: term.replace(/[^a-zA-Z0-9_\-\.]/, ''),
++          term: term.replace(/[^a-zA-Z0-9_\-\.@\+]/, ''),
+           topicId: self.get('topicId'),
+           exclude: excludedUsernames(),
+           includeGroups,
+diff --git a/app/assets/javascripts/discourse/lib/user-search.js.es6 b/app/assets/javascripts/discourse/lib/user-search.js.es6
+index 6361ea9213..5186779d3c 100644
+--- a/app/assets/javascripts/discourse/lib/user-search.js.es6
++++ b/app/assets/javascripts/discourse/lib/user-search.js.es6
+@@ -46,6 +46,7 @@ function organizeResults(r, options) {
+   var exclude = options.exclude || [],
+       limit = options.limit || 5,
+       users = [],
++      emails = [],
+       groups = [],
+       results = [];
+ 
+@@ -59,6 +60,12 @@ function organizeResults(r, options) {
+     });
+   }
+ 
++  if (options.term.match(/@/)) {
++    let e = { username: options.term };
++    emails = [ e ];
++    results.push(e);
++  }
++
+   if (r.groups) {
+     r.groups.every(function(g) {
+       if (results.length > limit && options.term.toLowerCase() !== g.name.toLowerCase()) return false;
+@@ -71,6 +78,7 @@ function organizeResults(r, options) {
+   }
+ 
+   results.users = users;
++  results.emails = emails;
+   results.groups = groups;
+   return results;
+ }
+@@ -94,7 +102,7 @@ export default function userSearch(options) {
+ 
+   return new Ember.RSVP.Promise(function(resolve) {
+     // TODO site setting for allowed regex in username
+-    if (term.match(/[^\w\.\-]/)) {
++    if (term.match(/[^\w_\-\.@\+]/)) {
+       resolve([]);
+       return;
+     }
+diff --git a/app/assets/javascripts/discourse/templates/user-selector-autocomplete.raw.hbs b/app/assets/javascripts/discourse/templates/user-selector-autocomplete.raw.hbs
+index 4c353fbd06..a72dd3e518 100644
+--- a/app/assets/javascripts/discourse/templates/user-selector-autocomplete.raw.hbs
++++ b/app/assets/javascripts/discourse/templates/user-selector-autocomplete.raw.hbs
+@@ -9,6 +9,18 @@
+         </a>
+       </li>
+     {{/each}}
++
++    {{#if options.emails}}
++      {{#each options.emails as |email|}}
++        <li>
++          <a href title="{{email.username}}">
++            <i class='fa fa-envelope'></i>
++            <span class='username'>{{email.username}}</span>
++          </a>
++        </li>
++      {{/each}}
++    {{/if}}
++
+     {{#if options.groups}}
+       {{#each options.groups as |group|}}
+         <li>
+diff --git a/app/controllers/posts_controller.rb b/app/controllers/posts_controller.rb
+index fa99d1f2d9..42c0202d76 100644
+--- a/app/controllers/posts_controller.rb
++++ b/app/controllers/posts_controller.rb
+@@ -617,7 +617,10 @@ class PostsController < ApplicationController
+       usernames = usernames.split(",")
+       groups = Group.mentionable(current_user).where('name in (?)', usernames).pluck('name')
+       usernames -= groups
++      emails = usernames.select { |user| user.match(/@/) }
++      usernames -= emails
+       result[:target_usernames] = usernames.join(",")
++      result[:target_emails] = emails.join(",")
+       result[:target_group_names] = groups.join(",")
+     end
+ 
+diff --git a/config/locales/server.en.yml b/config/locales/server.en.yml
+index 334e87e7b9..8731c1f332 100644
+--- a/config/locales/server.en.yml
++++ b/config/locales/server.en.yml
+@@ -382,6 +382,8 @@ en:
+               too_many_users: "You can only send warnings to one user at a time."
+               cant_send_pm: "Sorry, you cannot send a private message to that user."
+               no_user_selected: "You must select a valid user."
++              reply_by_email_disabled: "Reply by email has been disabled."
++              pm_email_tl_insufficient: "At least trust level 3 is required to send private messages to email addresses."
+             featured_link:
+               invalid: "is invalid. URL should include http:// or https://."
+               invalid_category: "can't be edited in this category."
+@@ -1256,6 +1258,8 @@ en:
+ 
+     min_trust_to_send_messages: "The minimum trust level required to create new private messages."
+ 
++    min_trust_to_send_email_messages: "The minimum trust level required to send new private messages via email (to staged users)."
++
+     newuser_max_links: "How many links a new user can add to a post."
+     newuser_max_images: "How many images a new user can add to a post."
+     newuser_max_attachments: "How many attachments a new user can add to a post."
+diff --git a/config/site_settings.yml b/config/site_settings.yml
+index 697b667c70..439c9a9b9e 100644
+--- a/config/site_settings.yml
++++ b/config/site_settings.yml
+@@ -857,6 +857,9 @@ trust:
+   min_trust_to_send_messages:
+     default: 1
+     enum: 'TrustLevelSetting'
++  min_trust_to_send_email_messages:
++    default: 3
++    enum: 'TrustLevelSetting'
+   tl1_requires_topics_entered: 5
+   tl1_requires_read_posts:
+     default: 30
+diff --git a/lib/topic_creator.rb b/lib/topic_creator.rb
+index 885f4f2605..08b50b8bfb 100644
+--- a/lib/topic_creator.rb
++++ b/lib/topic_creator.rb
+@@ -162,11 +162,20 @@ class TopicCreator
+     return unless @opts[:archetype] == Archetype.private_message
+     topic.subtype = TopicSubtype.user_to_user unless topic.subtype
+ 
+-    unless @opts[:target_usernames].present? || @opts[:target_group_names].present?
++    unless @opts[:target_usernames].present? || @opts[:target_emails].present? || @opts[:target_group_names].present?
+       rollback_with!(topic, :no_user_selected)
+     end
+ 
++    if @opts[:target_emails].present?
++      if !SiteSetting.reply_by_email_enabled? || !SiteSetting.enable_staged_users? then
++        rollback_with!(topic, :reply_by_email_disabled)
++      elsif @user.trust_level < SiteSetting.min_trust_to_send_email_messages then
++        rollback_with!(topic, :pm_email_tl_insufficient)
++      end
++    end
++
+     add_users(topic, @opts[:target_usernames])
++    add_emails(topic, @opts[:target_emails])
+     add_groups(topic, @opts[:target_group_names])
+     topic.topic_allowed_users.build(user_id: @user.id)
+   end
+@@ -195,6 +204,23 @@ class TopicCreator
+     rollback_with!(topic, :target_user_not_found) unless len == names.length
+   end
+ 
++  def add_emails(topic, emails)
++    return unless emails
++
++    emails = emails.split(',').flatten
++    len = 0
++
++    emails.each do |email|
++      display_name = email.split("@").first
++      user = find_or_create_user(email, display_name)
++      @added_users << user
++      topic.topic_allowed_users.build(user_id: user.id)
++      len += 1
++    end
++
++    rollback_with!(topic, :target_user_not_found) unless len == emails.length
++  end
++
+   def add_groups(topic, groups)
+     return unless groups
+     names = groups.split(',').flatten
+@@ -213,4 +239,29 @@ class TopicCreator
+   def check_can_send_permission!(topic, obj)
+     rollback_with!(topic, :cant_send_pm) unless @opts[:skip_validations] || @guardian.can_send_private_message?(obj)
+   end
++
++  def find_or_create_user(email, display_name)
++    user = nil
++
++    User.transaction do
++      begin
++        user = User.find_by_email(email)
++
++        if user.nil? && SiteSetting.enable_staged_users
++          username = UserNameSuggester.sanitize_username(display_name) if display_name.present?
++          user = User.create!(
++            email: email,
++            username: UserNameSuggester.suggest(username.presence || email),
++            name: display_name.presence || User.suggest_name(email),
++            staged: true
++          )
++        end
++      rescue
++        user = nil
++      end
++    end
++
++    user
++  end
++
+ end
+diff --git a/spec/components/topic_creator_spec.rb b/spec/components/topic_creator_spec.rb
+index a8cf92f315..4459302e36 100644
+--- a/spec/components/topic_creator_spec.rb
++++ b/spec/components/topic_creator_spec.rb
+@@ -8,6 +8,7 @@ describe TopicCreator do
+ 
+   let(:valid_attrs) { Fabricate.attributes_for(:topic) }
+   let(:pm_valid_attrs)  { { raw: 'this is a new post', title: 'this is a new title', archetype: Archetype.private_message, target_usernames: moderator.username } }
++  let(:pm_to_email_valid_attrs) { { raw: 'this is a new email', title: 'this is a new subject', archetype: Archetype.private_message, target_emails: 'moderator@example.com' } }
+ 
+   describe '#create' do
+     context 'topic success cases' do
+@@ -58,6 +59,8 @@ describe TopicCreator do
+           TopicCreator.any_instance.expects(:save_topic).returns(true)
+           TopicCreator.any_instance.expects(:watch_topic).returns(true)
+           SiteSetting.allow_duplicate_topic_titles = true
++          SiteSetting.reply_by_email_enabled = true
++          SiteSetting.enable_staged_users = true
+         end
+ 
+         it "should be possible for a regular user to send private message" do
+@@ -68,6 +71,11 @@ describe TopicCreator do
+           SiteSetting.min_trust_to_create_topic = TrustLevel[4]
+           expect(TopicCreator.create(user, Guardian.new(user), pm_valid_attrs)).to be_valid
+         end
++
++        it "should be possible for a trusted user to send private messages via email" do
++          SiteSetting.min_trust_to_send_email_messages = TrustLevel[1]
++          expect(TopicCreator.create(user, Guardian.new(user), pm_to_email_valid_attrs)).to be_valid
++        end
+       end
+ 
+       context 'failure cases' do
+@@ -75,6 +83,11 @@ describe TopicCreator do
+           SiteSetting.min_trust_to_send_messages = TrustLevel[4]
+           expect(-> { TopicCreator.create(user, Guardian.new(user), pm_valid_attrs) }).to raise_error(ActiveRecord::Rollback)
+         end
++
++        it "min_trust_to_send_email_messages should be checked when sending private messages via email" do
++          SiteSetting.min_trust_to_send_email_messages = TrustLevel[4]
++          expect(-> { TopicCreator.create(user, Guardian.new(user), pm_to_email_valid_attrs) }).to raise_error(ActiveRecord::Rollback)
++        end
+       end
+     end
+   end
+-- 
+2.14.1
+

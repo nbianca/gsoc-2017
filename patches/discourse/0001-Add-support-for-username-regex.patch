@@ -1,0 +1,90 @@
+From 30909ec54e171a35ffd8a6de3508b082be4a9ad0 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Mon, 27 Feb 2017 22:28:56 +0200
+Subject: [PATCH] Add support for username regex.
+
+---
+ app/models/user.rb           |  2 +-
+ config/locales/server.en.yml |  2 +-
+ lib/user_name_suggester.rb   |  6 +++++-
+ spec/models/user_spec.rb     | 16 ++++++++++++++++
+ 4 files changed, 23 insertions(+), 3 deletions(-)
+
+diff --git a/app/models/user.rb b/app/models/user.rb
+index e117a6dbc0..738bdf5a09 100644
+--- a/app/models/user.rb
++++ b/app/models/user.rb
+@@ -162,7 +162,7 @@ class User < ActiveRecord::Base
+     lower = username.downcase
+ 
+     User.where(username_lower: lower).blank? &&
+-      !SiteSetting.reserved_usernames.split("|").any? { |reserved| reserved.casecmp(username) == 0 }
++      SiteSetting.reserved_usernames.split("|").all? { |reserved| !lower.match('^' + Regexp.escape(reserved).gsub('\*', '.*') + '$') }
+   end
+ 
+   def self.plugin_staff_user_custom_fields
+diff --git a/config/locales/server.en.yml b/config/locales/server.en.yml
+index 6eed8c3563..7ba13160f5 100644
+--- a/config/locales/server.en.yml
++++ b/config/locales/server.en.yml
+@@ -1040,7 +1040,7 @@ en:
+     min_username_length: "Minimum username length in characters. WARNING: if any existing users or groups have names shorter than this, your site will break!"
+     max_username_length: "Maximum username length in characters. WARNING: if any existing users or groups have names longer than this, your site will break!"
+ 
+-    reserved_usernames: "Usernames for which signup is not allowed."
++    reserved_usernames: "Usernames for which signup is not allowed. Wildcard symbol * can be used to match any character zero or more times."
+ 
+     min_password_length: "Minimum password length."
+     min_admin_password_length: "Minimum password length for Admin."
+diff --git a/lib/user_name_suggester.rb b/lib/user_name_suggester.rb
+index e809be0b41..f26b3f36d1 100644
+--- a/lib/user_name_suggester.rb
++++ b/lib/user_name_suggester.rb
+@@ -21,12 +21,16 @@ module UserNameSuggester
+     name = fix_username(name)
+     i = 1
+     attempt = name
+-    until attempt == allow_username || User.username_available?(attempt)
++    until attempt == allow_username || User.username_available?(attempt) || i > 100
+       suffix = i.to_s
+       max_length = User.username_length.end - suffix.length - 1
+       attempt = "#{name[0..max_length]}#{suffix}"
+       i += 1
+     end
++    until attempt == allow_username || User.username_available?(attempt) || i > 200
++      attempt = SecureRandom.hex[0..SiteSetting.max_username_length]
++      i += 1
++    end
+     attempt
+   end
+ 
+diff --git a/spec/models/user_spec.rb b/spec/models/user_spec.rb
+index cf12bbab69..f52089126b 100644
+--- a/spec/models/user_spec.rb
++++ b/spec/models/user_spec.rb
+@@ -475,6 +475,22 @@ describe User do
+       expect(User.username_available?('DonKey')).to eq(false)
+       expect(User.username_available?('test')).to eq(false)
+     end
++
++    it 'should not allow usernames matched against an expession' do
++      SiteSetting.reserved_usernames = 'test)|*admin*|foo*|*bar|abc.def'
++
++      expect(User.username_available?('test')).to eq(true)
++      expect(User.username_available?('abc9def')).to eq(true)
++
++      expect(User.username_available?('admin')).to eq(false)
++      expect(User.username_available?('foo')).to eq(false)
++      expect(User.username_available?('bar')).to eq(false)
++
++      expect(User.username_available?('admi')).to eq(true)
++      expect(User.username_available?('bar.foo')).to eq(true)
++      expect(User.username_available?('foo.bar')).to eq(false)
++      expect(User.username_available?('baz.bar')).to eq(false)
++    end
+   end
+ 
+   describe 'email_validator' do
+-- 
+2.14.1
+

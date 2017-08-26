@@ -1,0 +1,300 @@
+From 03954766c2ba41765b86943e0b1bec52896db558 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Fri, 18 Aug 2017 21:18:57 +0100
+Subject: [PATCH] Split alias levels in mentionable and messageable levels.
+
+---
+ app/assets/javascripts/admin/templates/group.hbs   |  9 +++++--
+ .../javascripts/discourse/models/group.js.es6      |  9 ++++---
+ .../discourse/routes/new-message.js.es6            |  4 +--
+ app/controllers/admin/groups_controller.rb         |  6 +++--
+ app/controllers/groups_controller.rb               | 11 ++++++++
+ app/models/group.rb                                | 31 ++++++++++++++++------
+ app/serializers/basic_group_serializer.rb          |  3 ++-
+ app/serializers/group_show_serializer.rb           |  4 +++
+ config/locales/client.en.yml                       |  3 ++-
+ config/routes.rb                                   |  1 +
+ db/migrate/20170818191909_split_alias_levels.rb    |  8 ++++++
+ lib/guardian.rb                                    |  4 ++-
+ lib/import_export/category_exporter.rb             |  2 +-
+ 13 files changed, 73 insertions(+), 22 deletions(-)
+ create mode 100644 db/migrate/20170818191909_split_alias_levels.rb
+
+diff --git a/app/assets/javascripts/admin/templates/group.hbs b/app/assets/javascripts/admin/templates/group.hbs
+index 736fab05de..1bd414e330 100644
+--- a/app/assets/javascripts/admin/templates/group.hbs
++++ b/app/assets/javascripts/admin/templates/group.hbs
+@@ -111,8 +111,13 @@
+   {{/unless}}
+ 
+   <div>
+-    <label for="alias">{{i18n 'groups.alias_levels.title'}}</label>
+-    {{combo-box name="alias" valueAttribute="value" value=model.alias_level content=aliasLevelOptions}}
++    <label for="alias">{{i18n 'groups.alias_levels.mentionable'}}</label>
++    {{combo-box name="alias" valueAttribute="value" value=model.mentionable_level content=aliasLevelOptions}}
++  </div>
++
++  <div>
++    <label for="alias">{{i18n 'groups.alias_levels.messageable'}}</label>
++    {{combo-box name="alias" valueAttribute="value" value=model.messageable_level content=aliasLevelOptions}}
+   </div>
+ 
+   <div>
+diff --git a/app/assets/javascripts/discourse/models/group.js.es6 b/app/assets/javascripts/discourse/models/group.js.es6
+index 21206d3932..c06d596630 100644
+--- a/app/assets/javascripts/discourse/models/group.js.es6
++++ b/app/assets/javascripts/discourse/models/group.js.es6
+@@ -108,9 +108,9 @@ const Group = RestModel.extend({
+     return this.get('flair_color') ? this.get('flair_color').replace(new RegExp("[^0-9a-fA-F]", "g"), "") : null;
+   },
+ 
+-  @computed('alias_level')
+-  canEveryoneMention(aliasLevel) {
+-    return aliasLevel === '99';
++  @computed('mentionable_level')
++  canEveryoneMention(mentionableLevel) {
++    return mentionableLevel === '99';
+   },
+ 
+   @observes("visibility_level", "canEveryoneMention")
+@@ -131,7 +131,8 @@ const Group = RestModel.extend({
+   asJSON() {
+     const attrs = {
+       name: this.get('name'),
+-      alias_level: this.get('alias_level'),
++      mentionable_level: this.get('mentionable_level'),
++      messageable_level: this.get('messageable_level'),
+       visibility_level: this.get('visibility_level'),
+       automatic_membership_email_domains: this.get('emailDomains'),
+       automatic_membership_retroactive: !!this.get('automatic_membership_retroactive'),
+diff --git a/app/assets/javascripts/discourse/routes/new-message.js.es6 b/app/assets/javascripts/discourse/routes/new-message.js.es6
+index 85731a8e82..5010077a75 100644
+--- a/app/assets/javascripts/discourse/routes/new-message.js.es6
++++ b/app/assets/javascripts/discourse/routes/new-message.js.es6
+@@ -21,8 +21,8 @@ export default Discourse.Route.extend({
+           });
+         } else if (params.groupname) {
+           // send a message to a group
+-          Group.mentionable(params.groupname).then(result => {
+-            if (result.mentionable) {
++          Group.messageable(params.groupname).then(result => {
++            if (result.messageable) {
+               Ember.run.next(() => e.send("createNewMessageViaParams", params.groupname, params.title, params.body));
+             } else {
+               bootbox.alert(I18n.t("composer.cant_send_pm", { username: params.groupname }));
+diff --git a/app/controllers/admin/groups_controller.rb b/app/controllers/admin/groups_controller.rb
+index 99e2dc8dc2..5f481d3a2f 100644
+--- a/app/controllers/admin/groups_controller.rb
++++ b/app/controllers/admin/groups_controller.rb
+@@ -60,7 +60,8 @@ class Admin::GroupsController < Admin::AdminController
+ 
+   def save_group(group)
+     group.name = group_params[:name] if group_params[:name].present? && !group.automatic
+-    group.alias_level = group_params[:alias_level].to_i if group_params[:alias_level].present?
++    group.mentionable_level = group_params[:mentionable_level].to_i if group_params[:mentionable_level].present?
++    group.messageable_level = group_params[:messageable_level].to_i if group_params[:messageable_level].present?
+ 
+     if group_params[:visibility_level]
+       group.visibility_level = group_params[:visibility_level]
+@@ -192,7 +193,8 @@ class Admin::GroupsController < Admin::AdminController
+   def group_params
+     params.require(:group).permit(
+       :name,
+-      :alias_level,
++      :mentionable_level,
++      :messageable_level,
+       :visibility_level,
+       :automatic_membership_email_domains,
+       :automatic_membership_retroactive,
+diff --git a/app/controllers/groups_controller.rb b/app/controllers/groups_controller.rb
+index ba212bfe59..136c037d9d 100644
+--- a/app/controllers/groups_controller.rb
++++ b/app/controllers/groups_controller.rb
+@@ -3,6 +3,7 @@ class GroupsController < ApplicationController
+   before_filter :ensure_logged_in, only: [
+     :set_notifications,
+     :mentionable,
++    :messageable,
+     :update,
+     :messages,
+     :histories,
+@@ -203,6 +204,16 @@ class GroupsController < ApplicationController
+     end
+   end
+ 
++  def messageable
++    group = find_group(:name)
++
++    if group
++      render json: { messageable: Group.messageable(current_user).where(id: group.id).present? }
++    else
++      raise Discourse::InvalidAccess.new
++    end
++  end
++
+   def remove_member
+     group = Group.find(params[:id])
+     group.public_exit ? ensure_logged_in : guardian.ensure_can_edit!(group)
+diff --git a/app/models/group.rb b/app/models/group.rb
+index c302ca5092..6524fa2450 100644
+--- a/app/models/group.rb
++++ b/app/models/group.rb
+@@ -78,7 +78,8 @@ class Group < ActiveRecord::Base
+     )
+   end
+ 
+-  validates :alias_level, inclusion: { in: ALIAS_LEVELS.values }
++  validates :mentionable_level, inclusion: { in: ALIAS_LEVELS.values }
++  validates :messageable_level, inclusion: { in: ALIAS_LEVELS.values }
+ 
+   scope :visible_groups, ->(user) {
+     groups = Group.order(name: :asc).where("groups.id > 0")
+@@ -126,6 +127,23 @@ class Group < ActiveRecord::Base
+ 
+   scope :mentionable, lambda { |user|
+ 
++    where("mentionable_level in (:levels) OR
++          (
++            mentionable_level = #{ALIAS_LEVELS[:members_mods_and_admins]} AND id in (
++            SELECT group_id FROM group_users WHERE user_id = :user_id)
++          )", levels: alias_levels(user), user_id: user && user.id)
++  }
++
++  scope :messageable, lambda { |user|
++
++    where("messageable_level in (:levels) OR
++          (
++            messageable_level = #{ALIAS_LEVELS[:members_mods_and_admins]} AND id in (
++            SELECT group_id FROM group_users WHERE user_id = :user_id)
++          )", levels: alias_levels(user), user_id: user && user.id)
++  }
++
++  def self.alias_levels(user)
+     levels = [ALIAS_LEVELS[:everyone]]
+ 
+     if user && user.admin?
+@@ -139,12 +157,8 @@ class Group < ActiveRecord::Base
+                 ALIAS_LEVELS[:members_mods_and_admins]]
+     end
+ 
+-    where("alias_level in (:levels) OR
+-          (
+-            alias_level = #{ALIAS_LEVELS[:members_mods_and_admins]} AND id in (
+-            SELECT group_id FROM group_users WHERE user_id = :user_id)
+-          )", levels: levels, user_id: user && user.id)
+-  }
++    levels
++  end
+ 
+   def downcase_incoming_email
+     self.incoming_email = (incoming_email || "").strip.downcase.presence
+@@ -615,7 +629,8 @@ end
+ #  updated_at                         :datetime         not null
+ #  automatic                          :boolean          default(FALSE), not null
+ #  user_count                         :integer          default(0), not null
+-#  alias_level                        :integer          default(0)
++#  messageable_level                  :integer          default(0)
++#  mentionable_level                  :integer          default(0)
+ #  automatic_membership_email_domains :text
+ #  automatic_membership_retroactive   :boolean          default(FALSE)
+ #  primary_group                      :boolean          default(FALSE), not null
+diff --git a/app/serializers/basic_group_serializer.rb b/app/serializers/basic_group_serializer.rb
+index ca74ab7c59..4bdafc6b0e 100644
+--- a/app/serializers/basic_group_serializer.rb
++++ b/app/serializers/basic_group_serializer.rb
+@@ -4,7 +4,8 @@ class BasicGroupSerializer < ApplicationSerializer
+              :name,
+              :display_name,
+              :user_count,
+-             :alias_level,
++             :mentionable_level,
++             :messageable_level,
+              :visibility_level,
+              :automatic_membership_email_domains,
+              :automatic_membership_retroactive,
+diff --git a/app/serializers/group_show_serializer.rb b/app/serializers/group_show_serializer.rb
+index 3bd6bf31d1..933111b71c 100644
+--- a/app/serializers/group_show_serializer.rb
++++ b/app/serializers/group_show_serializer.rb
+@@ -25,6 +25,10 @@ class GroupShowSerializer < BasicGroupSerializer
+     Group.mentionable(scope.user).exists?(id: object.id)
+   end
+ 
++  def messageable
++    Group.messageable(scope.user).exists?(id: object.id)
++  end
++
+   private
+ 
+   def authenticated?
+diff --git a/config/locales/client.en.yml b/config/locales/client.en.yml
+index c11c8052bb..c6fc083488 100644
+--- a/config/locales/client.en.yml
++++ b/config/locales/client.en.yml
+@@ -459,7 +459,8 @@ en:
+         staff: "Group owners and staff"
+         owners: "Group owners and admins"
+       alias_levels:
+-        title: "Who can message and @mention this group?"
++        mentionable: "Who can @mention this group?"
++        messageable: "Who can message this group?"
+         nobody: "Nobody"
+         only_admins: "Only admins"
+         mods_and_admins: "Only moderators and Admins"
+diff --git a/config/routes.rb b/config/routes.rb
+index 64fe59a0cb..847f8ee083 100644
+--- a/config/routes.rb
++++ b/config/routes.rb
+@@ -443,6 +443,7 @@ Discourse::Application.routes.draw do
+     get 'messages'
+     get 'counts'
+     get 'mentionable'
++    get 'messageable'
+     get 'logs' => 'groups#histories'
+ 
+     collection do
+diff --git a/db/migrate/20170818191909_split_alias_levels.rb b/db/migrate/20170818191909_split_alias_levels.rb
+new file mode 100644
+index 0000000000..b7bb54ba90
+--- /dev/null
++++ b/db/migrate/20170818191909_split_alias_levels.rb
+@@ -0,0 +1,8 @@
++class SplitAliasLevels < ActiveRecord::Migration
++  def change
++    rename_column :groups, :alias_level, :mentionable_level
++    add_column :groups, :messageable_level, :integer, default: 0
++
++    Group.update_all('messageable_level=mentionable_level')
++  end
++end
+diff --git a/lib/guardian.rb b/lib/guardian.rb
+index dd75225f82..9f647dfa6c 100644
+--- a/lib/guardian.rb
++++ b/lib/guardian.rb
+@@ -296,7 +296,9 @@ class Guardian
+     # Can't send PMs to suspended users
+     (is_staff? || target.is_a?(Group) || !target.suspended?) &&
+     # Blocked users can only send PM to staff
+-    (!is_blocked? || target.staff?)
++    (!is_blocked? || target.staff?) &&
++    # It must be a messageable group.
++    (!target.is_a?(Group) || Group.messageable(@user).where(id: target.id).present?)
+   end
+ 
+   def can_see_emails?
+diff --git a/lib/import_export/category_exporter.rb b/lib/import_export/category_exporter.rb
+index 4e2a57e820..d40bd327c4 100644
+--- a/lib/import_export/category_exporter.rb
++++ b/lib/import_export/category_exporter.rb
+@@ -48,7 +48,7 @@ module ImportExport
+       self
+     end
+ 
+-    GROUP_ATTRS = [ :id, :name, :created_at, :alias_level, :visible,
++    GROUP_ATTRS = [ :id, :name, :created_at, :mentionable_level, :messageable_level, :visible,
+                     :automatic_membership_email_domains, :automatic_membership_retroactive,
+                     :primary_group, :title, :grant_trust_level, :incoming_email]
+ 
+-- 
+2.14.1
+

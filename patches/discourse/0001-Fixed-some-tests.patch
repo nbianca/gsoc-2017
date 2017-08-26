@@ -1,0 +1,136 @@
+From 9917188df64b0770fcb25452eb72c4cff1dc8e29 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Fri, 18 Aug 2017 22:24:50 +0100
+Subject: [PATCH] Fixed some tests.
+
+---
+ spec/components/guardian_spec.rb               | 2 +-
+ spec/controllers/posts_controller_spec.rb      | 4 ++--
+ spec/controllers/topics_controller_spec.rb     | 2 +-
+ spec/models/topic_spec.rb                      | 2 +-
+ spec/requests/groups_controller_spec.rb        | 2 +-
+ spec/serializers/group_show_serializer_spec.rb | 2 +-
+ spec/services/post_alerter_spec.rb             | 6 +++---
+ 7 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/spec/components/guardian_spec.rb b/spec/components/guardian_spec.rb
+index 049fcf4eac..dcc5f22937 100644
+--- a/spec/components/guardian_spec.rb
++++ b/spec/components/guardian_spec.rb
+@@ -207,7 +207,7 @@ describe Guardian do
+       it "returns true if target is a staff group" do
+         Group::STAFF_GROUPS.each do |name|
+           g = Group[name]
+-          g.alias_level = Group::ALIAS_LEVELS[:everyone]
++          g.messageable_level = Group::ALIAS_LEVELS[:everyone]
+           expect(Guardian.new(user).can_send_private_message?(g)).to be_truthy
+         end
+       end
+diff --git a/spec/controllers/posts_controller_spec.rb b/spec/controllers/posts_controller_spec.rb
+index c27a7c9e0e..e2c4300146 100644
+--- a/spec/controllers/posts_controller_spec.rb
++++ b/spec/controllers/posts_controller_spec.rb
+@@ -755,7 +755,7 @@ describe PostsController do
+ 
+       it "can send a message to a group" do
+ 
+-        group = Group.create(name: 'test_group', alias_level: Group::ALIAS_LEVELS[:nobody])
++        group = Group.create(name: 'test_group', messageable_level: Group::ALIAS_LEVELS[:nobody])
+         user1 = Fabricate(:user)
+         group.add(user1)
+ 
+@@ -767,7 +767,7 @@ describe PostsController do
+         expect(response).not_to be_success
+ 
+         # allow pm to this group
+-        group.update_columns(alias_level: Group::ALIAS_LEVELS[:everyone])
++        group.update_columns(messageable_level: Group::ALIAS_LEVELS[:everyone])
+ 
+         xhr :post, :create,           raw: 'I can haz a test',
+                                       title: 'I loves my test',
+diff --git a/spec/controllers/topics_controller_spec.rb b/spec/controllers/topics_controller_spec.rb
+index 0dc914785b..300ea2024c 100644
+--- a/spec/controllers/topics_controller_spec.rb
++++ b/spec/controllers/topics_controller_spec.rb
+@@ -1026,7 +1026,7 @@ describe TopicsController do
+     end
+ 
+     before do
+-      admins.alias_level = Group::ALIAS_LEVELS[:everyone]
++      admins.messageable_level = Group::ALIAS_LEVELS[:everyone]
+       admins.save!
+     end
+ 
+diff --git a/spec/models/topic_spec.rb b/spec/models/topic_spec.rb
+index 0b6bc4949d..c152875acc 100644
+--- a/spec/models/topic_spec.rb
++++ b/spec/models/topic_spec.rb
+@@ -455,7 +455,7 @@ describe Topic do
+ 
+           it 'can add admin to allowed groups' do
+             admins = Group[:admins]
+-            admins.update!(alias_level: Group::ALIAS_LEVELS[:everyone])
++            admins.update!(messageable_level: Group::ALIAS_LEVELS[:everyone])
+ 
+             expect(topic.invite_group(topic.user, admins)).to eq(true)
+             expect(topic.allowed_groups.include?(admins)).to eq(true)
+diff --git a/spec/requests/groups_controller_spec.rb b/spec/requests/groups_controller_spec.rb
+index 35e31d2751..6975052bea 100644
+--- a/spec/requests/groups_controller_spec.rb
++++ b/spec/requests/groups_controller_spec.rb
+@@ -69,7 +69,7 @@ describe GroupsController do
+       response_body = JSON.parse(response.body)
+       expect(response_body["mentionable"]).to eq(false)
+ 
+-      group.update_attributes!(alias_level: Group::ALIAS_LEVELS[:everyone])
++      group.update_attributes!(mentionable_level: Group::ALIAS_LEVELS[:everyone])
+ 
+       get "/groups/test/mentionable.json", name: group.name
+       expect(response).to be_success
+diff --git a/spec/serializers/group_show_serializer_spec.rb b/spec/serializers/group_show_serializer_spec.rb
+index b90db108e5..925cf8efb1 100644
+--- a/spec/serializers/group_show_serializer_spec.rb
++++ b/spec/serializers/group_show_serializer_spec.rb
+@@ -30,7 +30,7 @@ describe GroupShowSerializer do
+   end
+ 
+   describe '#mentionable' do
+-    let(:group) { Fabricate(:group, alias_level: Group::ALIAS_LEVELS[:everyone]) }
++    let(:group) { Fabricate(:group, mentionable_level: Group::ALIAS_LEVELS[:everyone]) }
+ 
+     it 'should return the right value' do
+       json = GroupShowSerializer.new(group, scope: Guardian.new).as_json
+diff --git a/spec/services/post_alerter_spec.rb b/spec/services/post_alerter_spec.rb
+index 9bbd4b23a6..ea47e4cf70 100644
+--- a/spec/services/post_alerter_spec.rb
++++ b/spec/services/post_alerter_spec.rb
+@@ -270,7 +270,7 @@ describe PostAlerter do
+ 
+   context '@group mentions' do
+ 
+-    let(:group) { Fabricate(:group, name: 'group', alias_level: Group::ALIAS_LEVELS[:everyone]) }
++    let(:group) { Fabricate(:group, name: 'group', mentionable_level: Group::ALIAS_LEVELS[:everyone]) }
+     let(:post) { create_post_with_alerts(raw: "Hello @group how are you?") }
+     before { group.add(evil_trout) }
+ 
+@@ -281,7 +281,7 @@ describe PostAlerter do
+ 
+       expect(GroupMention.count).to eq(1)
+ 
+-      Fabricate(:group, name: 'group-alt', alias_level: Group::ALIAS_LEVELS[:everyone])
++      Fabricate(:group, name: 'group-alt', mentionable_level: Group::ALIAS_LEVELS[:everyone])
+ 
+       expect {
+         create_post_with_alerts(raw: "Hello, @group-alt should not trigger a notification?")
+@@ -289,7 +289,7 @@ describe PostAlerter do
+ 
+       expect(GroupMention.count).to eq(2)
+ 
+-      group.update_columns(alias_level: Group::ALIAS_LEVELS[:members_mods_and_admins])
++      group.update_columns(mentionable_level: Group::ALIAS_LEVELS[:members_mods_and_admins])
+       expect {
+         create_post_with_alerts(raw: "Hello @group you are not mentionable")
+       }.to change(evil_trout.notifications, :count).by(0)
+-- 
+2.14.1
+

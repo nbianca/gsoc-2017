@@ -1,0 +1,161 @@
+From 0c1e51e04358a8314413a277eefc0ce06d19d974 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Tue, 14 Mar 2017 22:26:48 +0200
+Subject: [PATCH] Refactored Gfycat Onebox module.
+
+Improved video quality by using different source.
+Refactored module.
+Added tests.
+---
+ lib/onebox/engine/gfycat_onebox.rb              | 56 ++++++++++++++++++-------
+ lib/onebox/engine/whitelisted_generic_onebox.rb |  1 -
+ spec/fixtures/gfycat.response                   |  1 +
+ spec/lib/onebox/engine/gfycat_onebox_spec.rb    | 34 +++++++++++++++
+ 4 files changed, 75 insertions(+), 17 deletions(-)
+ create mode 100644 spec/fixtures/gfycat.response
+ create mode 100644 spec/lib/onebox/engine/gfycat_onebox_spec.rb
+
+diff --git a/lib/onebox/engine/gfycat_onebox.rb b/lib/onebox/engine/gfycat_onebox.rb
+index 6bd8471..5b28b99 100644
+--- a/lib/onebox/engine/gfycat_onebox.rb
++++ b/lib/onebox/engine/gfycat_onebox.rb
+@@ -2,36 +2,60 @@ module Onebox
+   module Engine
+     class GfycatOnebox
+       include Engine
+-      include StandardEmbed
++      include JSON
+ 
+       matches_regexp(/^https?:\/\/gfycat\.com\//)
+       always_https
+ 
+-      def to_html
+-        oembed = get_oembed
+-        src = Nokogiri::HTML::fragment(oembed[:html]).at_css("iframe")["src"]
+-        escaped_src = ::Onebox::Helpers.normalize_url_for_output(src)
++      def self.priority
++        # This engine should have priority over WhitelistedGenericOnebox.
++        1
++      end
+ 
++      def url
++        "https://gfycat.com/cajax/get/#{match[:name]}"
++      end
++
++      def to_html
+         <<-HTML
+-          <iframe src="#{escaped_src}"
+-                  width="#{oembed[:width]}"
+-                  height="#{oembed[:height]}"
+-                  scrolling="no"
+-                  frameborder="0"
+-                  allowfullscreen>
+-          </iframe>
++          <div>
++            <video controls loop autoplay muted poster="#{data[:posterUrl]}" width="#{data[:width]}" height="#{data[:height]}">
++              <source id="webmSource" src="#{data[:webmUrl]}" type="video/webm">
++              <source id="mp4Source" src="#{data[:mp4Url]}" type="video/mp4">
++              <img title="Sorry, your browser doesn't support HTML5 video." src="#{data[:posterUrl]}">
++            </video><br/>
++            <a href="#{data[:url]}">#{data[:name]}</a>
++          </div>
+         HTML
+       end
+ 
+       def placeholder_html
+-        og = get_opengraph
+-        escaped_src = ::Onebox::Helpers.normalize_url_for_output(og[:image])
+-
+         <<-HTML
+-          <img src="#{escaped_src}" width="#{og[:image_width]}" height="#{og[:image_height]}">
++          <a href="#{data[:url]}">
++            <img src="#{data[:posterUrl]}" width="#{data[:width]}" height="#{data[:height]}"><br/>
++            #{data[:gfyName]}
++          </a>
+         HTML
+       end
+ 
++      private
++
++        def match
++          @match ||= @url.match(/^https?:\/\/gfycat\.com\/(?<name>.+)/)
++        end
++
++        def data
++          {
++            name: raw['gfyItem']['gfyName'],
++            url: @url,
++            posterUrl: raw['gfyItem']['posterUrl'],
++            webmUrl: raw['gfyItem']['webmUrl'],
++            mp4Url: raw['gfyItem']['mp4Url'],
++            width: raw['gfyItem']['width'],
++            height: raw['gfyItem']['height']
++          }
++        end
++
+     end
+   end
+ end
+diff --git a/lib/onebox/engine/whitelisted_generic_onebox.rb b/lib/onebox/engine/whitelisted_generic_onebox.rb
+index a18aaf4..314822e 100644
+--- a/lib/onebox/engine/whitelisted_generic_onebox.rb
++++ b/lib/onebox/engine/whitelisted_generic_onebox.rb
+@@ -61,7 +61,6 @@ module Onebox
+           forbes.com
+           foxnews.com
+           funnyordie.com
+-          gfycat.com
+           groupon.com
+           howtogeek.com
+           huffingtonpost.ca
+diff --git a/spec/fixtures/gfycat.response b/spec/fixtures/gfycat.response
+new file mode 100644
+index 0000000..430d7df
+--- /dev/null
++++ b/spec/fixtures/gfycat.response
+@@ -0,0 +1 @@
++{"gfyItem":{"gfyId":"amusingposhcleanerwrasse","gfyName":"AmusingPoshCleanerwrasse","gfyNumber":"679816419","userName":"anonymous","width":"1920","height":"1080","frameRate":"60","numFrames":"407","mp4Url":"https:\/\/giant.gfycat.com\/AmusingPoshCleanerwrasse.mp4","webmUrl":"https:\/\/fat.gfycat.com\/AmusingPoshCleanerwrasse.webm","webpUrl":"https:\/\/thumbs.gfycat.com\/AmusingPoshCleanerwrasse.webp","mobileUrl":"https:\/\/thumbs.gfycat.com\/AmusingPoshCleanerwrasse-mobile.mp4","mobilePosterUrl":"https:\/\/thumbs.gfycat.com\/AmusingPoshCleanerwrasse-mobile.jpg","posterUrl":"https:\/\/thumbs.gfycat.com\/AmusingPoshCleanerwrasse-poster.jpg","thumb360Url":"https:\/\/thumbs.gfycat.com\/AmusingPoshCleanerwrasse-360.mp4","thumb360PosterUrl":"https:\/\/thumbs.gfycat.com\/AmusingPoshCleanerwrasse-thumb360.jpg","thumb100PosterUrl":"https:\/\/thumbs.gfycat.com\/AmusingPoshCleanerwrasse-thumb100.jpg","max5mbGif":"https:\/\/thumbs.gfycat.com\/AmusingPoshCleanerwrasse-size_restricted.gif","max2mbGif":"https:\/\/thumbs.gfycat.com\/AmusingPoshCleanerwrasse-small.gif","mjpgUrl":"https:\/\/thumbs.gfycat.com\/AmusingPoshCleanerwrasse.mjpg","gifUrl":"https:\/\/giant.gfycat.com\/AmusingPoshCleanerwrasse.gif","gifSize":"12850292","mp4Size":"12420204","webmSize":"2146835","createDate":"1488568617","views":150,"viewsNewEpoch":"149","title":null,"extraLemmas":null,"md5":"3c9261db26eda7e8f251f0abab64f8ca","tags":null,"userTags":null,"nsfw":"0","sar":null,"url":null,"source":"1","dynamo":null,"subreddit":null,"redditId":null,"redditIdText":null,"likes":null,"dislikes":null,"published":null,"description":null,"copyrightClaimaint":null,"languageText":null,"fullDomainWhitelist":[],"fullGeoWhitelist":[],"iframeProfileImageVisible":true}}
+\ No newline at end of file
+diff --git a/spec/lib/onebox/engine/gfycat_onebox_spec.rb b/spec/lib/onebox/engine/gfycat_onebox_spec.rb
+new file mode 100644
+index 0000000..bb19b4d
+--- /dev/null
++++ b/spec/lib/onebox/engine/gfycat_onebox_spec.rb
+@@ -0,0 +1,34 @@
++require "spec_helper"
++
++describe Onebox::Engine::GfycatOnebox do
++  let(:link) { "https://gfycat.com/AmusingPoshCleanerwrasse" }
++  let(:api_link) { "https://gfycat.com/cajax/get/AmusingPoshCleanerwrasse" }
++  let(:html) { described_class.new(link).to_html }
++  let(:placeholder_html) { described_class.new(link).placeholder_html }
++
++  before do
++    fake(api_link, response("gfycat"))
++  end
++
++  it "has the title" do
++    expect(html).to include("AmusingPoshCleanerwrasse")
++    expect(placeholder_html).to include("AmusingPoshCleanerwrasse")
++  end
++
++  it "has the link" do
++    expect(html).to include(link)
++    expect(placeholder_html).to include(link)
++  end
++
++  it "has the poster" do
++    expect(html).to include("https://thumbs.gfycat.com/AmusingPoshCleanerwrasse-poster.jpg")
++  end
++
++  it "has the webm video" do
++    expect(html).to include("https://fat.gfycat.com/AmusingPoshCleanerwrasse.webm")
++  end
++
++  it "has the mp4 video" do
++    expect(html).to include("https://giant.gfycat.com/AmusingPoshCleanerwrasse.mp4")
++  end
++end
+-- 
+2.14.1
+

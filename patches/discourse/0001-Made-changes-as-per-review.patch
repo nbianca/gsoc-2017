@@ -1,0 +1,49 @@
+From 375eb290b9caee8cea60830af0c157c8fc920ca5 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Mon, 10 Jul 2017 23:28:35 +0100
+Subject: [PATCH] Made changes as per review.
+
+---
+ .../javascripts/discourse/components/composer-editor.js.es6       | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/app/assets/javascripts/discourse/components/composer-editor.js.es6 b/app/assets/javascripts/discourse/components/composer-editor.js.es6
+index 3d6e67747f..47e0306fd7 100644
+--- a/app/assets/javascripts/discourse/components/composer-editor.js.es6
++++ b/app/assets/javascripts/discourse/components/composer-editor.js.es6
+@@ -33,12 +33,10 @@ export default Ember.Component.extend({
+ 
+     this.appEvents.on('composer:show-preview', () => {
+       this.set('showPreview', true);
+-      this.keyValueStore.set({ key: 'composer.showPreview', value: true });
+     });
+ 
+     this.appEvents.on('composer:hide-preview', () => {
+       this.set('showPreview', false);
+-      this.keyValueStore.set({ key: 'composer.showPreview', value: false });
+     });
+   },
+ 
+@@ -52,6 +50,11 @@ export default Ember.Component.extend({
+     return showPreview ? I18n.t('composer.hide_preview') : I18n.t('composer.show_preview');
+   },
+ 
++  @observes('showPreview')
++  showPreviewChanged() {
++      this.keyValueStore.set({ key: 'composer.showPreview', value: this.get('showPreview') });
++  },
++
+   @computed
+   markdownOptions() {
+     return {
+@@ -498,7 +501,6 @@ export default Ember.Component.extend({
+ 
+     togglePreview() {
+       this.toggleProperty('showPreview');
+-      this.keyValueStore.set({ key: 'composer.showPreview', value: this.get('showPreview') });
+     },
+ 
+     extraButtons(toolbar) {
+-- 
+2.14.1
+

@@ -1,0 +1,41 @@
+From 02800ce67323199903b5cd565164625fbacf898e Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Thu, 24 Aug 2017 19:33:50 +0100
+Subject: [PATCH] Made staff groups messageable by the system.
+
+---
+ app/controllers/posts_controller.rb | 2 +-
+ lib/guardian.rb                     | 4 +---
+ 2 files changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/app/controllers/posts_controller.rb b/app/controllers/posts_controller.rb
+index fa99d1f2d9..744abf3eb8 100644
+--- a/app/controllers/posts_controller.rb
++++ b/app/controllers/posts_controller.rb
+@@ -615,7 +615,7 @@ class PostsController < ApplicationController
+ 
+     if usernames = result[:target_usernames]
+       usernames = usernames.split(",")
+-      groups = Group.mentionable(current_user).where('name in (?)', usernames).pluck('name')
++      groups = Group.messageable(current_user).where('name in (?)', usernames).pluck('name')
+       usernames -= groups
+       result[:target_usernames] = usernames.join(",")
+       result[:target_group_names] = groups.join(",")
+diff --git a/lib/guardian.rb b/lib/guardian.rb
+index 9f647dfa6c..dd75225f82 100644
+--- a/lib/guardian.rb
++++ b/lib/guardian.rb
+@@ -296,9 +296,7 @@ class Guardian
+     # Can't send PMs to suspended users
+     (is_staff? || target.is_a?(Group) || !target.suspended?) &&
+     # Blocked users can only send PM to staff
+-    (!is_blocked? || target.staff?) &&
+-    # It must be a messageable group.
+-    (!target.is_a?(Group) || Group.messageable(@user).where(id: target.id).present?)
++    (!is_blocked? || target.staff?)
+   end
+ 
+   def can_see_emails?
+-- 
+2.14.1
+

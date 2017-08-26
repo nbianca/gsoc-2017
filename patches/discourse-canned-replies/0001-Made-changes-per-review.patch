@@ -1,0 +1,62 @@
+From 04604116e972af3e2880af0369ff260b46dc94d7 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Sun, 16 Jul 2017 14:42:34 +0100
+Subject: [PATCH] Made changes per review.
+
+---
+ .travis.yml | 17 ++++++-----------
+ 1 file changed, 6 insertions(+), 11 deletions(-)
+
+diff --git a/.travis.yml b/.travis.yml
+index f42907f..31973d4 100644
+--- a/.travis.yml
++++ b/.travis.yml
+@@ -4,9 +4,10 @@ env:
+   global:
+     - DISCOURSE_HOSTNAME=www.example.com
+     - RUBY_GC_MALLOC_LIMIT=50000000
++    - PLUGIN_NAME='Canned Replies'
+   matrix:
+-    - "RAILS_MASTER=0"
+-    - "RAILS_MASTER=1"
++    - QUNIT_RUN=0
++    - QUNIT_RUN=1
+ 
+ addons:
+   postgresql: 9.5
+@@ -17,11 +18,6 @@ addons:
+     - optipng
+     - jhead
+ 
+-matrix:
+-  allow_failures:
+-    - env: "RAILS_MASTER=1"
+-  fast_finish: true
+-
+ rvm:
+   - 2.4.1
+   - 2.3.3
+@@ -36,7 +32,7 @@ cache: yarn
+ before_install:
+   - git clone --depth=1 https://github.com/discourse/discourse.git build ; cd build ; rm -rf plugins/*
+   - gem install bundler
+-  - git clone --depth=1 https://github.com/discourse/discourse-canned-replies.git plugins/discourse-canned-replies
++  - git clone --depth=1 -b $TRAVIS_BRANCH https://github.com/$TRAVIS_REPO_SLUG.git plugins/discourse-canned-replies
+   - yarn global add eslint babel-eslint
+   - eslint --ext .es6 plugins/**/assets/javascripts
+ 
+@@ -44,8 +40,7 @@ before_script:
+   - bundle exec rake db:create db:migrate
+ 
+ install:
+-  - bash -c "if [ '$RAILS_MASTER' == '1' ]; then bundle update --retry=3 --jobs=3 arel rails seed-fu; fi"
+-  - bash -c "if [ '$RAILS_MASTER' == '0' ]; then bundle install --without development --deployment --retry=3 --jobs=3; fi"
++  - bundle install --without development --deployment --retry=3 --jobs=3
+ 
+ script:
+-  - bundle exec rake plugin:spec
+\ No newline at end of file
++  - bash -c "if [ '$QUNIT_RUN' == '0' ]; then bundle exec rake plugin:spec; else bundle exec rake qunit:test FILTER='$PLUGIN_NAME'; fi"
+-- 
+2.14.1
+

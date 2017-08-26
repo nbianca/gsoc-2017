@@ -1,0 +1,66 @@
+From 8b7bafb1b1fb36518593bfe97ab1ea62a8df0edf Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Tue, 22 Aug 2017 22:25:42 +0100
+Subject: [PATCH] Added settings validator.
+
+---
+ config/locales/server.en.yml                         |  2 ++
+ config/site_settings.yml                             |  1 +
+ .../enable_private_email_messages_validator.rb       | 20 ++++++++++++++++++++
+ 3 files changed, 23 insertions(+)
+ create mode 100644 lib/validators/enable_private_email_messages_validator.rb
+
+diff --git a/config/locales/server.en.yml b/config/locales/server.en.yml
+index 5699f1f841..c1a9dc5593 100644
+--- a/config/locales/server.en.yml
++++ b/config/locales/server.en.yml
+@@ -1587,6 +1587,8 @@ en:
+       invalid_regex: "Regex is invalid or not allowed."
+       email_editable_enabled: "You must disable 'email editable' before enabling this setting."
+       enable_sso_disabled: "You must first enable 'enable sso' before enabling this setting."
++      staged_users_disabled: "You must first enable 'staged users' before enabling this setting."
++      reply_by_email_disabled: "You must first enable 'reply by email' before enabling this setting."
+ 
+   search:
+     within_post: "#%{post_number} by %{username}"
+diff --git a/config/site_settings.yml b/config/site_settings.yml
+index 5e448a64ea..29e574dc73 100644
+--- a/config/site_settings.yml
++++ b/config/site_settings.yml
+@@ -511,6 +511,7 @@ posting:
+   enable_private_email_messages:
+     default: false
+     client: true
++    validator: "EnablePrivateEmailMessagesValidator"
+   editing_grace_period: 300
+   post_edit_time_limit:
+     default: 86400
+diff --git a/lib/validators/enable_private_email_messages_validator.rb b/lib/validators/enable_private_email_messages_validator.rb
+new file mode 100644
+index 0000000000..748f19bab6
+--- /dev/null
++++ b/lib/validators/enable_private_email_messages_validator.rb
+@@ -0,0 +1,20 @@
++class EnablePrivateEmailMessagesValidator
++
++  def initialize(opts = {})
++    @opts = opts
++  end
++
++  def valid_value?(val)
++    return true if val == "f"
++    SiteSetting.enable_staged_users? &&
++    SiteSetting.reply_by_email_enabled?
++  end
++
++  def error_message
++    if !SiteSetting.enable_staged_users?
++      I18n.t("site_settings.errors.staged_users_disabled")
++    elsif !SiteSetting.reply_by_email_enabled?
++      I18n.t("site_settings.errors.reply_by_email_disabled")
++    end
++  end
++end
+-- 
+2.14.1
+

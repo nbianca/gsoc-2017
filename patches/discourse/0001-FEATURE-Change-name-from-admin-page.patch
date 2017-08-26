@@ -1,0 +1,174 @@
+From 9065df76ade33f763ef9b7dc5d225f874433d4f4 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Sun, 2 Apr 2017 20:35:30 +0300
+Subject: [PATCH] FEATURE: Change name from admin page.
+
+https://github.com/discourse/discourse/pull/4770
+---
+ .../admin/controllers/admin-user-index.js.es6      | 52 +++++++++++++++++++---
+ .../javascripts/admin/templates/user-index.hbs     | 38 ++++++++++++----
+ config/locales/client.en.yml                       |  2 -
+ 3 files changed, 75 insertions(+), 17 deletions(-)
+
+diff --git a/app/assets/javascripts/admin/controllers/admin-user-index.js.es6 b/app/assets/javascripts/admin/controllers/admin-user-index.js.es6
+index 91717cf8f0..175463c0a1 100644
+--- a/app/assets/javascripts/admin/controllers/admin-user-index.js.es6
++++ b/app/assets/javascripts/admin/controllers/admin-user-index.js.es6
+@@ -2,8 +2,11 @@ import { ajax } from 'discourse/lib/ajax';
+ import CanCheckEmails from 'discourse/mixins/can-check-emails';
+ import { propertyNotEqual, setting } from 'discourse/lib/computed';
+ import { userPath } from 'discourse/lib/url';
++import { popupAjaxError } from 'discourse/lib/ajax-error';
+ 
+ export default Ember.Controller.extend(CanCheckEmails, {
++  editingUsername: false,
++  editingName: false,
+   editingTitle: false,
+   originalPrimaryGroupId: null,
+   availableGroups: null,
+@@ -55,23 +58,58 @@ export default Ember.Controller.extend(CanCheckEmails, {
+     anonymize() { return this.get('model').anonymize(); },
+     destroy() { return this.get('model').destroy(); },
+ 
++    toggleUsernameEdit() {
++      this.set('userUsernameValue', this.get('model.username'));
++      this.toggleProperty('editingUsername');
++    },
++
++    saveUsername() {
++      const oldUsername = this.get('model.username');
++      this.set('model.username', this.get('userUsernameValue'));
++
++      return ajax(`/users/${oldUsername.toLowerCase()}/preferences/username`, {
++        data: { new_username: this.get('userUsernameValue') },
++        type: 'PUT'
++      }).catch(e => {
++        this.set('model.username', oldUsername);
++        popupAjaxError(e);
++      }).finally(() => this.toggleProperty('editingUsername'));
++    },
++
++    toggleNameEdit() {
++      this.set('userNameValue', this.get('model.name'));
++      this.toggleProperty('editingName');
++    },
++
++    saveName() {
++      const oldName = this.get('model.name');
++      this.set('model.name', this.get('userNameValue'));
++
++      return ajax(userPath(`${this.get('model.username').toLowerCase()}.json`), {
++        data: { name: this.get('userNameValue') },
++        type: 'PUT'
++      }).catch(e => {
++        this.set('model.name', oldName);
++        popupAjaxError(e);
++      }).finally(() => this.toggleProperty('editingName'));
++    },
++
+     toggleTitleEdit() {
+       this.set('userTitleValue', this.get('model.title'));
+       this.toggleProperty('editingTitle');
+     },
+ 
+     saveTitle() {
+-      const self = this;
++      const prevTitle = this.get('userTitleValue');
+ 
++      this.set('model.title', this.get('userTitleValue'));
+       return ajax(userPath(`${this.get('model.username').toLowerCase()}.json`), {
+         data: {title: this.get('userTitleValue')},
+         type: 'PUT'
+-      }).catch(function(e) {
+-        bootbox.alert(I18n.t("generic_error_with_reason", {error: "http: " + e.status + " - " + e.body}));
+-      }).finally(function() {
+-        self.set('model.title', self.get('userTitleValue'));
+-        self.toggleProperty('editingTitle');
+-      });
++      }).catch(e => {
++        this.set('model.title', prevTitle);
++        popupAjaxError(e);
++      }).finally(() => this.toggleProperty('editingTitle'));
+     },
+ 
+     generateApiKey() {
+diff --git a/app/assets/javascripts/admin/templates/user-index.hbs b/app/assets/javascripts/admin/templates/user-index.hbs
+index 923fb1c09b..f172c65124 100644
+--- a/app/assets/javascripts/admin/templates/user-index.hbs
++++ b/app/assets/javascripts/admin/templates/user-index.hbs
+@@ -22,18 +22,40 @@
+ 
+   <div class='display-row username'>
+     <div class='field'>{{i18n 'user.username.title'}}</div>
+-    <div class='value'>{{model.username}}</div>
++    <div class='value'>
++      {{#if editingUsername}}
++        {{text-field value=userUsernameValue autofocus="autofocus"}}
++      {{else}}
++        <span {{action "toggleUsernameEdit"}}>{{model.username}}</span>
++      {{/if}}
++    </div>
+     <div class='controls'>
+-      {{#link-to 'preferences.username' model class="btn"}}
+-        {{fa-icon "pencil"}}
+-        {{i18n 'user.change_username.title'}}
+-      {{/link-to}}
++      {{#if editingUsername}}
++        {{d-button action="saveUsername" label="admin.user_fields.save"}}
++        <a href {{action "toggleUsernameEdit"}}>{{i18n 'cancel'}}</a>
++      {{else}}
++        {{d-button action="toggleUsernameEdit" icon="pencil"}}
++      {{/if}}
+     </div>
+   </div>
+ 
+   <div class='display-row'>
+     <div class='field'>{{i18n 'user.name.title'}}</div>
+-    <div class='value'>{{model.name}}</div>
++    <div class='value'>
++      {{#if editingName}}
++        {{text-field value=userNameValue autofocus="autofocus"}}
++      {{else}}
++        <span {{action "toggleNameEdit"}}>{{model.name}}</span>
++      {{/if}}
++    </div>
++    <div class='controls'>
++      {{#if editingName}}
++        {{d-button action="saveName" label="admin.user_fields.save"}}
++        <a href {{action "toggleNameEdit"}}>{{i18n 'cancel'}}</a>
++      {{else}}
++        {{d-button action="toggleNameEdit" icon="pencil"}}
++      {{/if}}
++    </div>
+   </div>
+ 
+   {{#if canCheckEmails}}
+@@ -90,10 +112,10 @@
+     </div>
+     <div class='controls'>
+       {{#if editingTitle}}
+-        {{d-button action="saveTitle" label="admin.user.save_title"}}
++        {{d-button action="saveTitle" label="admin.user_fields.save"}}
+         <a href {{action "toggleTitleEdit"}}>{{i18n 'cancel'}}</a>
+       {{else}}
+-        {{d-button action="toggleTitleEdit" icon="pencil" label="admin.user.edit_title"}}
++        {{d-button action="toggleTitleEdit" icon="pencil"}}
+       {{/if}}
+     </div>
+   </div>
+diff --git a/config/locales/client.en.yml b/config/locales/client.en.yml
+index ab0caede55..29b0d2a179 100644
+--- a/config/locales/client.en.yml
++++ b/config/locales/client.en.yml
+@@ -3099,8 +3099,6 @@ en:
+         blocked: "Blocked?"
+         staged: "Staged?"
+         show_admin_profile: "Admin"
+-        edit_title: "Edit Title"
+-        save_title: "Save Title"
+         refresh_browsers: "Force browser refresh"
+         refresh_browsers_message: "Message sent to all clients!"
+         show_public_profile: "Show Public Profile"
+-- 
+2.14.1
+

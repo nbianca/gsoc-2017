@@ -1,0 +1,71 @@
+From f1d2ea6009b439eaf56af92cd8438a045f385f89 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Wed, 28 Jun 2017 11:31:53 +0300
+Subject: [PATCH] Added Travis configuration.
+
+---
+ .travis.yml | 51 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 51 insertions(+)
+ create mode 100644 .travis.yml
+
+diff --git a/.travis.yml b/.travis.yml
+new file mode 100644
+index 0000000..f42907f
+--- /dev/null
++++ b/.travis.yml
+@@ -0,0 +1,51 @@
++language: ruby
++
++env:
++  global:
++    - DISCOURSE_HOSTNAME=www.example.com
++    - RUBY_GC_MALLOC_LIMIT=50000000
++  matrix:
++    - "RAILS_MASTER=0"
++    - "RAILS_MASTER=1"
++
++addons:
++  postgresql: 9.5
++  apt:
++    packages:
++    - gifsicle
++    - jpegoptim
++    - optipng
++    - jhead
++
++matrix:
++  allow_failures:
++    - env: "RAILS_MASTER=1"
++  fast_finish: true
++
++rvm:
++  - 2.4.1
++  - 2.3.3
++
++services:
++  - redis-server
++
++sudo: required
++dist: trusty
++cache: yarn
++
++before_install:
++  - git clone --depth=1 https://github.com/discourse/discourse.git build ; cd build ; rm -rf plugins/*
++  - gem install bundler
++  - git clone --depth=1 https://github.com/discourse/discourse-canned-replies.git plugins/discourse-canned-replies
++  - yarn global add eslint babel-eslint
++  - eslint --ext .es6 plugins/**/assets/javascripts
++
++before_script:
++  - bundle exec rake db:create db:migrate
++
++install:
++  - bash -c "if [ '$RAILS_MASTER' == '1' ]; then bundle update --retry=3 --jobs=3 arel rails seed-fu; fi"
++  - bash -c "if [ '$RAILS_MASTER' == '0' ]; then bundle install --without development --deployment --retry=3 --jobs=3; fi"
++
++script:
++  - bundle exec rake plugin:spec
+\ No newline at end of file
+-- 
+2.14.1
+

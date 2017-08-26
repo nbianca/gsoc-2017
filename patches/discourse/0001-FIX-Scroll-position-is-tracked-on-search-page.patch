@@ -1,0 +1,71 @@
+From 7213e02dee0bb3e6955f5906256a7a7a78564f21 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nbianca@users.noreply.github.com>
+Date: Sun, 13 Aug 2017 13:24:29 +0100
+Subject: [PATCH] FIX: Scroll position is tracked on search page
+
+---
+ .../discourse/components/scroll-tracker.js.es6     | 41 ++++++++++++++++++++++
+ .../discourse/templates/full-page-search.hbs       |  1 +
+ 2 files changed, 42 insertions(+)
+ create mode 100644 app/assets/javascripts/discourse/components/scroll-tracker.js.es6
+
+diff --git a/app/assets/javascripts/discourse/components/scroll-tracker.js.es6 b/app/assets/javascripts/discourse/components/scroll-tracker.js.es6
+new file mode 100644
+index 0000000000..cb3fa3a613
+--- /dev/null
++++ b/app/assets/javascripts/discourse/components/scroll-tracker.js.es6
+@@ -0,0 +1,41 @@
++import Scrolling from 'discourse/mixins/scrolling';
++
++export default Ember.Component.extend(Scrolling, {
++
++  didReceiveAttrs() {
++    this._super();
++
++    this.set('trackerName', `scroll-tracker-${this.get('name')}`);
++  },
++
++  didInsertElement() {
++    this._super();
++
++    this.bindScrolling({ name: this.get('name') });
++  },
++
++  didRender() {
++    this._super();
++
++    const data = this.session.get(this.get('trackerName'));
++    if (data && data.position >= 0 && data.tag === this.get('tag')) {
++      Ember.run.next(() => $(window).scrollTop(data.position + 1));
++    }
++  },
++
++  willDestroyElement() {
++    this._super();
++
++    this.unbindScrolling(this.get('name'));
++  },
++
++  scrolled() {
++    this._super();
++
++    this.session.set(this.get('trackerName'), {
++      position: $(window).scrollTop(),
++      tag: this.get('tag'),
++    });
++  },
++
++});
+diff --git a/app/assets/javascripts/discourse/templates/full-page-search.hbs b/app/assets/javascripts/discourse/templates/full-page-search.hbs
+index 3382bbb07a..c1779595cf 100644
+--- a/app/assets/javascripts/discourse/templates/full-page-search.hbs
++++ b/app/assets/javascripts/discourse/templates/full-page-search.hbs
+@@ -1,4 +1,5 @@
+ {{#d-section pageClass="search" class="search-container"}}
++  {{scroll-tracker name="full-page-search" tag=searchTerm}}
+   <div class="search row clearfix">
+     {{search-text-field value=searchTerm class="full-page-search input-xxlarge search no-blur" action="search" hasAutofocus=hasAutofocus}}
+     {{d-button action="search" icon="search" class="btn-primary" disabled=searching}}
+-- 
+2.14.1
+

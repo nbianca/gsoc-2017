@@ -1,0 +1,126 @@
+From 40d8e20667d5238668464402ff4e66fbe47f23e9 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Sun, 12 Mar 2017 23:33:17 +0200
+Subject: [PATCH] Added WikiMedia OneBox thumbnails.
+
+---
+ lib/onebox/engine.rb                     |  1 +
+ lib/onebox/engine/wikimedia_onebox.rb    | 42 ++++++++++++++++++++++++++++++++
+ spec/fixtures/wikimedia.response         |  1 +
+ spec/lib/onebox/engine/wikimedia_spec.rb | 23 +++++++++++++++++
+ templates/wikimedia.mustache             |  3 +++
+ 5 files changed, 70 insertions(+)
+ create mode 100644 lib/onebox/engine/wikimedia_onebox.rb
+ create mode 100644 spec/fixtures/wikimedia.response
+ create mode 100644 spec/lib/onebox/engine/wikimedia_spec.rb
+ create mode 100644 templates/wikimedia.mustache
+
+diff --git a/lib/onebox/engine.rb b/lib/onebox/engine.rb
+index 27a731e..8478ceb 100644
+--- a/lib/onebox/engine.rb
++++ b/lib/onebox/engine.rb
+@@ -149,6 +149,7 @@ require_relative "engine/video_onebox"
+ require_relative "engine/audio_onebox"
+ require_relative "engine/stack_exchange_onebox"
+ require_relative "engine/twitter_status_onebox"
++require_relative "engine/wikimedia_onebox"
+ require_relative "engine/wikipedia_onebox"
+ require_relative "engine/youtube_onebox"
+ require_relative "engine/youku_onebox"
+diff --git a/lib/onebox/engine/wikimedia_onebox.rb b/lib/onebox/engine/wikimedia_onebox.rb
+new file mode 100644
+index 0000000..1b95e42
+--- /dev/null
++++ b/lib/onebox/engine/wikimedia_onebox.rb
+@@ -0,0 +1,42 @@
++module Onebox
++  module Engine
++    class WikimediaOnebox
++      include Engine
++      include LayoutSupport
++      include JSON
++
++      matches_regexp /^https?:\/\/commons\.wikimedia\.org\/wiki\/(File:.+)/
++      always_https
++
++      def self.priority
++        # Wikimedia links end in an image extension.
++        # E.g. https://commons.wikimedia.org/wiki/File:Stones_members_montage2.jpg
++        # This engine should have priority over the generic ImageOnebox.
++
++        1
++      end
++
++      def url
++        "https://en.wikipedia.org/w/api.php?action=query&titles=#{match[:name]}&prop=imageinfo&iilimit=50&iiprop=timestamp|user|url&iiurlwidth=500&format=json"
++      end
++
++      private
++
++        def match
++          @match ||= @url.match(/^https?:\/\/commons\.wikimedia\.org\/wiki\/(?<name>File:.+)/)
++        end
++
++        def data
++          first_page = raw['query']['pages'].first[1]
++
++          {
++            link: first_page['imageinfo'].first['descriptionurl'],
++            title: first_page['title'],
++            image: first_page['imageinfo'].first['url'],
++            thumbnail: first_page['imageinfo'].first['thumburl']
++          }
++        end
++
++    end
++  end
++end
+diff --git a/spec/fixtures/wikimedia.response b/spec/fixtures/wikimedia.response
+new file mode 100644
+index 0000000..3481ce9
+--- /dev/null
++++ b/spec/fixtures/wikimedia.response
+@@ -0,0 +1 @@
++{"batchcomplete":"","query":{"normalized":[{"from":"File:Stones_members_montage2.jpg","to":"File:Stones members montage2.jpg"}],"pages":{"-1":{"ns":6,"title":"File:Stones members montage2.jpg","missing":"","known":"","imagerepository":"shared","imageinfo":[{"timestamp":"2010-12-07T23:13:30Z","user":"84user","thumburl":"https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Stones_members_montage2.jpg/500px-Stones_members_montage2.jpg","thumbwidth":500,"thumbheight":459,"url":"https://upload.wikimedia.org/wikipedia/commons/a/af/Stones_members_montage2.jpg","descriptionurl":"https://commons.wikimedia.org/wiki/File:Stones_members_montage2.jpg","descriptionshorturl":"https://commons.wikimedia.org/w/index.php?curid=12245228"}]}}}}
+\ No newline at end of file
+diff --git a/spec/lib/onebox/engine/wikimedia_spec.rb b/spec/lib/onebox/engine/wikimedia_spec.rb
+new file mode 100644
+index 0000000..9afa1a9
+--- /dev/null
++++ b/spec/lib/onebox/engine/wikimedia_spec.rb
+@@ -0,0 +1,23 @@
++require "spec_helper"
++
++describe Onebox::Engine::WikimediaOnebox do
++  let(:link) { "https://commons.wikimedia.org/wiki/File:Stones_members_montage2.jpg" }
++  let(:api_link) { "https://en.wikipedia.org/w/api.php?action=query&titles=File:Stones_members_montage2.jpg&prop=imageinfo&iilimit=50&iiprop=timestamp|user|url&iiurlwidth=500&format=json" }
++  let(:html) { described_class.new(link).to_html }
++
++  before do
++    fake(api_link, response("wikimedia"))
++  end
++
++  it "has the title" do
++    expect(html).to include("File:Stones members montage2.jpg")
++  end
++
++  it "has the link" do
++    expect(html).to include(link)
++  end
++
++  it "has the image" do
++    expect(html).to include("https://upload.wikimedia.org/wikipedia/commons/a/af/Stones_members_montage2.jpg")
++  end
++end
+diff --git a/templates/wikimedia.mustache b/templates/wikimedia.mustache
+new file mode 100644
+index 0000000..b1a302f
+--- /dev/null
++++ b/templates/wikimedia.mustache
+@@ -0,0 +1,3 @@
++{{#image}}<img src="{{image}}" class="thumbnail"/>{{/image}}
++
++<h3><a href='{{link}}' target='_blank'>{{title}}</a></h3>
+-- 
+2.14.1
+

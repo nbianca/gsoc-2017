@@ -1,0 +1,40 @@
+From 66ee98b3d783746ef432705c11c164454f4d3ca7 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Fri, 18 Aug 2017 22:17:04 +0100
+Subject: [PATCH] Improved metadata for tags.
+
+---
+ app/views/list/list.erb       | 4 ++++
+ app/views/tags/index.html.erb | 4 ++++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/app/views/list/list.erb b/app/views/list/list.erb
+index 4e9dfbcf26..d8679ae7bd 100644
+--- a/app/views/list/list.erb
++++ b/app/views/list/list.erb
+@@ -90,6 +90,10 @@
+     <%= auto_discovery_link_tag(:rss, { action: :category_feed }, title: t('rss_topics_in_category', category: @category.name)) %>
+     <%= raw crawlable_meta_data(title: @category.name, description: @category.description) %>
+   <% end %>
++<% elsif @tag_id %>
++  <% content_for :head do %>
++    <%= raw crawlable_meta_data(title: @title, description: @description_meta) %>
++  <% end %>
+ <% else %>
+   <% content_for :head do %>
+     <%= raw crawlable_meta_data(title: SiteSetting.title, description: SiteSetting.site_description) %>
+diff --git a/app/views/tags/index.html.erb b/app/views/tags/index.html.erb
+index 95deb76b9a..41f18eeb7b 100644
+--- a/app/views/tags/index.html.erb
++++ b/app/views/tags/index.html.erb
+@@ -18,3 +18,7 @@
+ </div>
+ 
+ <% end %>
++
++<% content_for :head do %>
++  <%= raw crawlable_meta_data(title: @title, description: @description_meta) %>
++<% end %>
+-- 
+2.14.1
+

@@ -1,0 +1,26 @@
+From eb30a7fede2ba2c89ff98e1db5dc84800097d66a Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Tue, 27 Jun 2017 19:20:40 +0300
+Subject: [PATCH] Fixed return type.
+
+---
+ plugin.rb | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/plugin.rb b/plugin.rb
+index 2f805cc..4298e6f 100644
+--- a/plugin.rb
++++ b/plugin.rb
+@@ -67,7 +67,8 @@ after_initialize do
+ 
+       def get_reply(user_id, reply_id)
+         replies = all(user_id)
+-        replies[reply_id]
++
++        replies.detect { |reply| reply['id'] == reply_id }
+       end
+ 
+       def remove(user_id, reply_id)
+-- 
+2.14.1
+

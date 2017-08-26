@@ -1,0 +1,65 @@
+From b00c6893f3f93d29a1a9161f2727bffea1c579e5 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Thu, 24 Aug 2017 19:45:37 +0100
+Subject: [PATCH] Fixed tests.
+
+---
+ lib/guardian.rb                                           | 2 +-
+ lib/validators/enable_private_email_messages_validator.rb | 8 ++++----
+ spec/components/topic_creator_spec.rb                     | 4 +++-
+ 3 files changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/lib/guardian.rb b/lib/guardian.rb
+index ba81c4cd72..a09d11ae1d 100644
+--- a/lib/guardian.rb
++++ b/lib/guardian.rb
+@@ -301,7 +301,7 @@ class Guardian
+ 
+   def cand_send_private_messages_to_email?
+     # Staged users must be enabled to create a temporary user.
+-    SiteSetting.enable_staged_users? &&
++    SiteSetting.enable_staged_users &&
+     # User is authenticated
+     authenticated? &&
+     # User is trusted enough
+diff --git a/lib/validators/enable_private_email_messages_validator.rb b/lib/validators/enable_private_email_messages_validator.rb
+index 748f19bab6..42e8aa64e8 100644
+--- a/lib/validators/enable_private_email_messages_validator.rb
++++ b/lib/validators/enable_private_email_messages_validator.rb
+@@ -6,14 +6,14 @@ class EnablePrivateEmailMessagesValidator
+ 
+   def valid_value?(val)
+     return true if val == "f"
+-    SiteSetting.enable_staged_users? &&
+-    SiteSetting.reply_by_email_enabled?
++    SiteSetting.enable_staged_users &&
++    SiteSetting.reply_by_email_enabled
+   end
+ 
+   def error_message
+-    if !SiteSetting.enable_staged_users?
++    if !SiteSetting.enable_staged_users
+       I18n.t("site_settings.errors.staged_users_disabled")
+-    elsif !SiteSetting.reply_by_email_enabled?
++    elsif !SiteSetting.reply_by_email_enabled
+       I18n.t("site_settings.errors.reply_by_email_disabled")
+     end
+   end
+diff --git a/spec/components/topic_creator_spec.rb b/spec/components/topic_creator_spec.rb
+index 184c5da9d7..ade3f59604 100644
+--- a/spec/components/topic_creator_spec.rb
++++ b/spec/components/topic_creator_spec.rb
+@@ -72,7 +72,9 @@ describe TopicCreator do
+         end
+ 
+         it "should be possible for a trusted user to send private messages via email" do
+-          SiteSetting.enable_private_email_messages = true
++          SiteSetting.expects(:enable_staged_users).returns(true)
++          SiteSetting.expects(:enable_staged_users).returns(true)
++          SiteSetting.expects(:enable_private_email_messages).returns(true)
+           SiteSetting.min_trust_to_send_email_messages = TrustLevel[1]
+           expect(TopicCreator.create(user, Guardian.new(user), pm_to_email_valid_attrs)).to be_valid
+         end
+-- 
+2.14.1
+

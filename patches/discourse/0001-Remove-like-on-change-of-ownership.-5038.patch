@@ -1,0 +1,42 @@
+From 117417848e1e01acce0364510cfe2b5b85204f7f Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nbianca@users.noreply.github.com>
+Date: Fri, 11 Aug 2017 08:55:00 +0100
+Subject: [PATCH] Remove like on change of ownership. (#5038)
+
+---
+ app/services/post_owner_changer.rb       | 1 +
+ spec/services/post_owner_changer_spec.rb | 4 ++++
+ 2 files changed, 5 insertions(+)
+
+diff --git a/app/services/post_owner_changer.rb b/app/services/post_owner_changer.rb
+index 2a9c71b21e..797cc3938d 100644
+--- a/app/services/post_owner_changer.rb
++++ b/app/services/post_owner_changer.rb
+@@ -22,6 +22,7 @@ class PostOwnerChanger
+         end
+         post.topic = @topic
+         post.set_owner(@new_owner, @acting_user, @skip_revision)
++        PostAction.remove_act(@new_owner, post, PostActionType.types[:like])
+       end
+ 
+       @topic.update_statistics
+diff --git a/spec/services/post_owner_changer_spec.rb b/spec/services/post_owner_changer_spec.rb
+index 52acee5245..ea88731ea0 100644
+--- a/spec/services/post_owner_changer_spec.rb
++++ b/spec/services/post_owner_changer_spec.rb
+@@ -26,8 +26,12 @@ describe PostOwnerChanger do
+       freeze_time 2.days.from_now
+ 
+       old_user = p1.user
++      PostAction.act(user_a, p1, PostActionType.types[:like])
++      p1.reload
++      expect(p1.topic.like_count).to eq(1)
+       PostOwnerChanger.new(post_ids: [p1.id], topic_id: topic.id, new_owner: user_a, acting_user: editor).change_owner!
+       p1.reload
++      expect(p1.topic.like_count).to eq(0)
+       expect(p1.topic.bumped_at).to be_within(1.second).of (bumped_at)
+       expect(p1.topic.last_post_user_id).to eq(user_a.id)
+       expect(old_user).not_to eq(p1.user)
+-- 
+2.14.1
+

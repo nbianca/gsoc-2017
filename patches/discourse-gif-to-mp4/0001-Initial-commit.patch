@@ -1,0 +1,45 @@
+From dff2bc1575b7e5f66ba2ab580ec76969ab0d55fd Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Sat, 1 Jul 2017 00:01:18 +0300
+Subject: [PATCH] Initial commit.
+
+---
+ plugin.rb | 26 ++++++++++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+ create mode 100644 plugin.rb
+
+diff --git a/plugin.rb b/plugin.rb
+new file mode 100644
+index 0000000..b083f60
+--- /dev/null
++++ b/plugin.rb
+@@ -0,0 +1,26 @@
++# name: gif-to-mp4
++# about: This plugin converts .GIF images to .MP4.
++# version: 0.1
++# url: https://github.com/discourse/discourse-gif-to-mp4
++
++after_initialize do
++
++  DiscourseEvent.on(:upload) do |upload|
++    if upload.filename[/\.gif$/i]
++      tempfile = Tempfile.new(["video", ".mp4"])
++      OptimizedImage.ensure_safe_paths!(upload.file.path, tempfile.path)
++
++      Discourse::Utils.execute_command(
++        'ffmpeg', '-y',
++        '-f', 'gif',
++        '-i', upload.file.path,
++        tempfile.path
++      )
++
++      upload.file = tempfile
++      upload.filename = (File.basename(upload.filename, ".*").presence || I18n.t("video").presence || "video") + ".mp4"
++      upload.opts[:content_type] = "video/mp4"
++    end
++  end
++
++end
+-- 
+2.14.1
+

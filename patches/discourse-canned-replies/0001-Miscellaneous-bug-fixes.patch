@@ -1,0 +1,189 @@
+From 978d9ed931558f58238b7c8e925efc344ed0879f Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Sat, 8 Jul 2017 12:58:08 +0100
+Subject: [PATCH] Miscellaneous bug fixes.
+
+- Filtering does not make any additional server calls anymore.
+- Filtering searches through content as well, but those results will appear at
+the bottom (their relevance score is lower).
+- When clicking on canned replies, if preview is hidden, it will be shown
+first and then also show the canned replies.
+- Canned replies are reloaded after add, edit and delete operations.
+- Canned replies modal is no longer shown after an add or an edit.
+---
+ .../editor-preview/canned-replies.js.es6           | 52 +++++++++++++++-------
+ .../discourse/controllers/edit-reply.js.es6        | 12 ++++-
+ .../discourse/controllers/new-reply.js.es6         | 12 ++++-
+ .../add-canned-replies-ui-builder.js.es6           |  1 +
+ .../connectors/editor-preview/canned-replies.hbs   |  2 +-
+ 5 files changed, 59 insertions(+), 20 deletions(-)
+
+diff --git a/assets/javascripts/discourse/connectors/editor-preview/canned-replies.js.es6 b/assets/javascripts/discourse/connectors/editor-preview/canned-replies.js.es6
+index 19b09e3..3310500 100644
+--- a/assets/javascripts/discourse/connectors/editor-preview/canned-replies.js.es6
++++ b/assets/javascripts/discourse/connectors/editor-preview/canned-replies.js.es6
+@@ -9,41 +9,63 @@ export default {
+     component.set('isVisible', false);
+     component.set('loadingReplies', false);
+     component.set('replies', []);
++    component.set('filteredReplies', []);
+     component.set('filterHint', i18n('canned_replies.filter_hint'));
+ 
+-    component.appEvents.on('canned-replies:show', () => {
+-      component.send('show');
+-    });
++    if (!component.appEvents.has('canned-replies:show')) {
++      component.appEvents.on('canned-replies:show', () => {
++        component.send('show');
++      });
++    }
+ 
+-    component.appEvents.on('canned-replies:hide', () => {
+-      component.send('hide');
+-    });
++    if (!component.appEvents.has('canned-replies:hide')) {
++      component.appEvents.on('canned-replies:hide', () => {
++        component.send('hide');
++      });
++    }
+ 
+     component.addObserver('listFilter', function () {
+       const filterTitle = component.get('listFilter').toLowerCase();
+-
+-      component.set('loadingReplies', true);
+-      ajax("/canned_replies").then(results => {
+-        component.set("replies", results.replies.filter(function (reply) {
+-          return reply.title.toLowerCase().indexOf(filterTitle) !== -1;
+-        }));
+-      }).catch(popupAjaxError).finally(() => component.set('loadingReplies', false));
++      const filtered = component.get('replies').map(function (reply) {
++        /* Give a relevant score to each reply. */
++        reply.score = 0;
++        if (reply.title.toLowerCase().indexOf(filterTitle) !== -1) {
++          reply.score += 2;
++        } else if (reply.content.toLowerCase().indexOf(filterTitle) !== -1) {
++          reply.score += 1;
++        }
++        return reply;
++      }).filter(function (reply) {
++        /* Filter irrelevant replies. */
++        return reply.score != 0;
++      }).sort(function (a, b) {
++        /* Sort replies by relevance and title. */
++        if (a.score != b.score) {
++          return a.score > b.score ? -1 : 1; /* descending */
++        } else if (a.title != b.title) {
++          return a.title < b.title ? -1 : 1; /* ascending */
++        }
++        return 0;
++      });
++      component.set("filteredReplies", filtered);
+     });
+   },
+ 
+   actions: {
+     show() {
+-      $(".d-editor-preview").hide();
++      $(".d-editor-preview-wrapper > .d-editor-preview").hide();
+       this.set('isVisible', true);
+ 
+       this.set('loadingReplies', true);
+       ajax("/canned_replies").then(results => {
+         this.set("replies", results.replies);
++        this.set("filterHint", "");
++        this.set("filteredReplies", results.replies);
+       }).catch(popupAjaxError).finally(() => this.set('loadingReplies', false));
+     },
+ 
+     hide() {
+-      $(".d-editor-preview").show();
++      $(".d-editor-preview-wrapper > .d-editor-preview").show();
+       this.set('isVisible', false);
+     },
+ 
+diff --git a/assets/javascripts/discourse/controllers/edit-reply.js.es6 b/assets/javascripts/discourse/controllers/edit-reply.js.es6
+index d4645a0..765c6ff 100644
+--- a/assets/javascripts/discourse/controllers/edit-reply.js.es6
++++ b/assets/javascripts/discourse/controllers/edit-reply.js.es6
+@@ -38,7 +38,11 @@ export default Ember.Controller.extend(ModalFunctionality, {
+             type: "DELETE"
+           }).then(() => {
+             this.send('closeModal');
+-            showModal('canned-replies');
++            if (this.site.mobileView) {
++              showModal('canned-replies');
++            } else {
++              this.appEvents.trigger('canned-replies:show');
++            }
+           }).catch(popupAjaxError);
+         }
+       });
+@@ -46,7 +50,11 @@ export default Ember.Controller.extend(ModalFunctionality, {
+ 
+     cancel: function () {
+       this.send('closeModal');
+-      showModal('canned-replies');
++      if (this.site.mobileView) {
++        showModal('canned-replies');
++      } else {
++        this.appEvents.trigger('canned-replies:show');
++      }
+     }
+   }
+ });
+diff --git a/assets/javascripts/discourse/controllers/new-reply.js.es6 b/assets/javascripts/discourse/controllers/new-reply.js.es6
+index d5b9ebb..a6beece 100644
+--- a/assets/javascripts/discourse/controllers/new-reply.js.es6
++++ b/assets/javascripts/discourse/controllers/new-reply.js.es6
+@@ -20,13 +20,21 @@ export default Ember.Controller.extend(ModalFunctionality, {
+         data: { title: this.get('newTitle'), content: this.get('newContent') }
+       }).then(() => {
+         this.send('closeModal');
+-        showModal('canned-replies');
++        if (this.site.mobileView) {
++          showModal('canned-replies');
++        } else {
++          this.appEvents.trigger('canned-replies:show');
++        }
+       }).catch(popupAjaxError);
+     },
+ 
+     cancel() {
+       this.send('closeModal');
+-      showModal('canned-replies');
++      if (this.site.mobileView) {
++        showModal('canned-replies');
++      } else {
++        this.appEvents.trigger('canned-replies:show');
++      }
+     }
+   }
+ });
+diff --git a/assets/javascripts/discourse/initializers/add-canned-replies-ui-builder.js.es6 b/assets/javascripts/discourse/initializers/add-canned-replies-ui-builder.js.es6
+index ea1a1c3..cd0b1b8 100644
+--- a/assets/javascripts/discourse/initializers/add-canned-replies-ui-builder.js.es6
++++ b/assets/javascripts/discourse/initializers/add-canned-replies-ui-builder.js.es6
+@@ -9,6 +9,7 @@ function initializeCannedRepliesUIBuilder(api) {
+         if (this.site.mobileView) {
+           showModal('canned-replies').setProperties({ composerModel: this.model });
+         } else {
++          this.appEvents.trigger('composer:show-preview');
+           this.appEvents.trigger('canned-replies:show');
+         }
+       }
+diff --git a/assets/javascripts/discourse/templates/connectors/editor-preview/canned-replies.hbs b/assets/javascripts/discourse/templates/connectors/editor-preview/canned-replies.hbs
+index 3140fbf..f54e1eb 100644
+--- a/assets/javascripts/discourse/templates/connectors/editor-preview/canned-replies.hbs
++++ b/assets/javascripts/discourse/templates/connectors/editor-preview/canned-replies.hbs
+@@ -7,7 +7,7 @@
+           label="canned_replies.insert.new_button"}}
+       {{text-field value=listFilter placeholder=filterHint}}
+       <a class="close pull-right" {{action "hide"}}>{{fa-icon "times"}}</a>
+-      {{#each replies as |r|}}
++      {{#each filteredReplies as |r|}}
+         {{canned-reply reply=r}}
+       {{/each}}
+     {{/conditional-loading-spinner}}
+-- 
+2.14.1
+

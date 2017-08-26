@@ -1,0 +1,17 @@
+From 520d9befc2dd34304abcdfb2a408362e83fd9f69 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Tue, 14 Mar 2017 22:35:46 +0200
+Subject: [PATCH] Renamed file to match others.
+
+---
+ spec/lib/onebox/engine/{wikimedia_spec.rb => wikimedia_onebox_spec.rb} | 0
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+ rename spec/lib/onebox/engine/{wikimedia_spec.rb => wikimedia_onebox_spec.rb} (100%)
+
+diff --git a/spec/lib/onebox/engine/wikimedia_spec.rb b/spec/lib/onebox/engine/wikimedia_onebox_spec.rb
+similarity index 100%
+rename from spec/lib/onebox/engine/wikimedia_spec.rb
+rename to spec/lib/onebox/engine/wikimedia_onebox_spec.rb
+-- 
+2.14.1
+

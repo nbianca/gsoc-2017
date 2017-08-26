@@ -1,0 +1,55 @@
+From f8a31d927f35e1302ec4788b8a430667f703f59a Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Thu, 16 Mar 2017 14:30:16 +0200
+Subject: [PATCH] Fixes duplicated topic title in header after edit.
+
+---
+ .../discourse/components/discourse-topic.js.es6        | 18 ++++++++++++++++++
+ .../javascripts/discourse/controllers/topic.js.es6     |  2 +-
+ 2 files changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/app/assets/javascripts/discourse/components/discourse-topic.js.es6 b/app/assets/javascripts/discourse/components/discourse-topic.js.es6
+index 17f40f3928..4a578d1f1b 100644
+--- a/app/assets/javascripts/discourse/components/discourse-topic.js.es6
++++ b/app/assets/javascripts/discourse/components/discourse-topic.js.es6
+@@ -64,6 +64,24 @@ export default Ember.Component.extend(AddArchetypeClass, Scrolling, {
+     this.appEvents.on('post:highlight', postNumber => {
+       Ember.run.scheduleOnce('afterRender', null, highlight, postNumber);
+     });
++
++    this.appEvents.on('header:update-topic', topic => {
++
++      if (topic === null) {
++        this._lastShowTopic = false;
++        this.appEvents.trigger('header:hide-topic');
++        return;
++      }
++
++      const offset = window.pageYOffset || $('html').scrollTop();
++      this._lastShowTopic = this.showTopicInHeader(topic, offset);
++
++      if (this._lastShowTopic) {
++        this.appEvents.trigger('header:show-topic', topic);
++      } else {
++        this.appEvents.trigger('header:hide-topic');
++      }
++    });
+   },
+ 
+   willDestroyElement() {
+diff --git a/app/assets/javascripts/discourse/controllers/topic.js.es6 b/app/assets/javascripts/discourse/controllers/topic.js.es6
+index 17996c23ef..26f8fb941f 100644
+--- a/app/assets/javascripts/discourse/controllers/topic.js.es6
++++ b/app/assets/javascripts/discourse/controllers/topic.js.es6
+@@ -913,7 +913,7 @@ export default Ember.Controller.extend(SelectedPostsCount, BufferedContent, {
+       if (data.reload_topic) {
+         topic.reload().then(() => {
+           this.send('postChangedRoute', topic.get('post_number') || 1);
+-          this.appEvents.trigger('header:show-topic', topic);
++          this.appEvents.trigger('header:update-topic', topic);
+         });
+       } else {
+         if (topic.get('isPrivateMessage') &&
+-- 
+2.14.1
+

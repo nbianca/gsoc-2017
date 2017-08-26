@@ -1,0 +1,30 @@
+From 68955fa46087e685d4ccbc1c42463747b73bd2c3 Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Tue, 20 Jun 2017 16:21:29 +0300
+Subject: [PATCH] Update title if a title is not already present.
+
+---
+ assets/javascripts/discourse/controllers/canned-replies.js.es6 | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/assets/javascripts/discourse/controllers/canned-replies.js.es6 b/assets/javascripts/discourse/controllers/canned-replies.js.es6
+index b54ca3c..b700c16 100644
+--- a/assets/javascripts/discourse/controllers/canned-replies.js.es6
++++ b/assets/javascripts/discourse/controllers/canned-replies.js.es6
+@@ -54,8 +54,11 @@ export default Ember.Controller.extend(ModalFunctionality, {
+   actions: {
+     apply: function() {
+       if (this.composerModel) {
+-        const newReply = this.composerModel.reply + this.selectedReply.content;
+-        this.composerModel.setProperties({ reply: newReply });
++        const newReply = this.composerModel.get('reply') + this.selectedReply.content;
++        this.composerModel.set('reply', newReply);
++        if (!this.composerModel.get('title')) {
++          this.composerModel.set('title', this.selectedReply.title);
++        }
+       }
+ 
+       ajax(`/canned_replies/${this.get('selectedReplyID')}/use`, {
+-- 
+2.14.1
+

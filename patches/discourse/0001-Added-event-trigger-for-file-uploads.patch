@@ -1,0 +1,37 @@
+From adf8c1ff5984f50f8ba048260021e6c29ef1812f Mon Sep 17 00:00:00 2001
+From: Bianca Nenciu <nenciu.bianca@gmail.com>
+Date: Sun, 9 Jul 2017 19:29:54 +0100
+Subject: [PATCH] Added event trigger for file uploads.
+
+---
+ lib/upload_creator.rb | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/lib/upload_creator.rb b/lib/upload_creator.rb
+index 43ef92c27e..809ebc14df 100644
+--- a/lib/upload_creator.rb
++++ b/lib/upload_creator.rb
+@@ -27,6 +27,11 @@ class UploadCreator
+     @opts = opts
+   end
+ 
++  attr_accessor :upload
++  attr_accessor :file
++  attr_accessor :filename
++  attr_accessor :opts
++
+   def create_for(user_id)
+     if filesize <= 0
+       @upload.errors.add(:base, I18n.t("upload.empty"))
+@@ -34,6 +39,8 @@ class UploadCreator
+     end
+ 
+     DistributedMutex.synchronize("upload_#{user_id}_#{@filename}") do
++      DiscourseEvent.trigger(:upload, self)
++
+       if FileHelper.is_image?(@filename)
+         extract_image_info!
+         return @upload if @upload.errors.present?
+-- 
+2.14.1
+
