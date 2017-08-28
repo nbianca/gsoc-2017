@@ -18,6 +18,6 @@ In the `reports` directory you can find all of my weekly reports.
 
 * [GSoC 2017 Project Page](https://summerofcode.withgoogle.com/projects/#4876116438286336)
 * [Original Project Proposal](https://docs.google.com/document/d/1m-8zFaDZtoCtZWMldhzUzSVHru3_D8j0o7hFSY_jHOY/)
-* [My pull requests to `discourse`](https://github.com/discourse/discourse/pulls?q=is:pr%20author:nbianca)
-* [My pull requests to `discourse-canned-replies`](https://github.com/discourse/discourse-canned-replies/pulls?q=is:pr%20author:nbianca)
-* [My pull requests to `onebox`](https://github.com/discourse/onebox/pulls?q=is:pr%20author:nbianca)
+* My [pull requests](https://github.com/discourse/discourse/pulls?q=is:pr%20author:nbianca) and [commits](https://github.com/discourse/discourse/commits/master?author=nbianca) to `discourse`
+* My [pull requests](https://github.com/discourse/discourse-canned-replies/pulls?q=is:pr%20author:nbianca) and [commits](https://github.com/discourse/discourse-canned-replies/commits/master?author=nbianca) to `discourse-canned-replies`
+* My [pull requests](https://github.com/discourse/onebox/pulls?q=is:pr%20author:nbianca) and [commits](https://github.com/discourse/onebox/commits/master?author=nbianca) to `onebox`
